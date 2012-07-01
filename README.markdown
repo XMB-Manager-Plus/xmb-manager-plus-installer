@@ -26,7 +26,7 @@ XMB Manager Plus (XMBM+) Installer is the source code for the EBOOT.BIN of XMB M
 -  SFX/SFO editor/converter: aldostools
 -  Graphical design: Berion
 
-## XMBM+ Installer
+### XMBM+ Installer
 
 -  Coding: andreus
 
