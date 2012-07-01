@@ -33,8 +33,14 @@
 #include FT_SYNTHESIS_H
 #include FT_STROKER_H
 
-#define CHROMAKEY		0x000000ff
+#define CHROMAKEY		0x00000000
 #define DEFAULT_FONT_SIZE	40
+
+#define LATIN2			0
+#define JPN			1
+#define KOR			2
+#define CGB			3
+#define KANA			4
 
 class Font{
 public:
@@ -44,17 +50,16 @@ public:
 	Font(u32 Size, const char *Font_Path, Minimum *min);
 	Font(const void *MemFont, u32 MemFont_size, Minimum *min);
 	Font(const char *Font_Path, Minimum *min);
+	Font(const int ID, Minimum *min);
 	~Font();
-	u32 FontColor;
-	u32 FontSize;
-	s32 width;
-	s32 height;
+
+	void ChangeFontColor(u32 color);
+	void ChangeFontSize(u32 size);
+
+
 	void Printf(u32 x, u32 y,const char *a, ...);
 	void Printf(u32 x, u32 y, u32 Color,const char *a, ...);
 	void Printf(u32 x, u32 y, u32 Color, u32 Size,const char *a, ...);
-	u32 color_depth;
-	u32 color_pitch;
-	u32 color_offset;
 	void Disable_Fonts();
 
 	void PrintfToBitmap(u32 x, u32 y, NoRSX_Bitmap* bmap,const char *a, ...);
@@ -72,6 +77,15 @@ protected:
 	FT_Face face;
 	FT_Bitmap *bitmap;
 	FT_Vector vec;
+
+	u32 FontColor;
+	u32 FontSize;
+	s32 width;
+	s32 height;
+
+	u32 color_depth;
+	u32 color_pitch;
+	u32 color_offset;
 	
 	int font;
 	Minimum *m;

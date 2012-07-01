@@ -161,6 +161,11 @@ s32 install(std::string fw, std::string app)
 	return 0;
 }
 
+s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
+{
+	return (Graphics->width-(strlen(message)*fsize/2))/2;
+}
+
 s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::string status)
 {
 	std::string menu1[][10]= { { "Normal CFW", "Cobra CFW", "NFW CFW", "Rebug CFW" }, { "Normal CFW", "Rebug CFW" } };
@@ -174,7 +179,9 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 	//std::string IMAGE_PATH=APPFOLDER+"/ICON0.PNG";
 	//std::string TITLEFONT_PATH=APPFOLDER+"/resources/fonts/GOODTIME.ttf";
 	//std::string TEXTFONT_PATH="/dev_flash/data/font/SCE-PS3-SR-R-LATIN2.TTF";
-	std::string TEXTFONT_PATH=APPFOLDER+"/resources/fonts/verdana.ttf";
+	std::string TITLEFONT_PATH=APPFOLDER+"/resources/fonts/arial.ttf";
+	std::string TEXTFONT_PATH=APPFOLDER+"/resources/fonts/arial.ttf";
+	std::string TEXTFONTBOLD_PATH=APPFOLDER+"/resources/fonts/arialbd.ttf";
 	int cury=0;
 
 	Background B1(Graphics);
@@ -188,45 +195,44 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 	u32 imgX =(Graphics->width/2)-(png.width/2), imgY = 30;
 	//Now you loaded the png into memory. you need to display it: This will draw the image at x = 200 and y = 300 on the buffer.
 	I1.AlphaDrawIMG(imgX,imgY,&png);
-	Font F1(0xd38900,   30, TEXTFONT_PATH.c_str(), Graphics);
+	int sizeTitleFont = 30;
 	int sizeFont = 20;
-	Font F2(COLOR_WHITE, sizeFont, TEXTFONT_PATH.c_str(), Graphics);
-
-    //to print any kind of text i've added a printf function: 
-	u32 textX =(Graphics->width/2)-230;
-
-	//for(int j=0;j<0x18;j++)
-	//	F2.Printf(textX,610+(j*(F2.FontSize+4)),"%02x",platform_info[j]);
-	//F1.Printf(textX,150, COLOR_YELLOW,	"12345678901234567890123456789012345678901234567890");
+	//Font F1(0xd38900, sizeTitleFont, TITLEFONT_PATH.c_str(), Graphics);
+	//Font F2(TEXTFONT_PATH.c_str(), Graphics);
+	//Font F3(TEXTFONTBOLD_PATH.c_str(), Graphics);
+	Font F1(LATIN2, Graphics);
+	Font F2(LATIN2, Graphics);
+	Font F3(LATIN2, Graphics);
 
 	if (menu_id==1)
 	{
-		F1.Printf(textX,220, 0xd38900,	"     CHOOSE A FIRMWARE");
+		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
 		for(int j=0;j<menu1_size[fw_version_index];j++)
 		{
-			if (j==choosed) F2.Printf(textX,280+(j*(sizeFont+4)),COLOR_RED,"%s",menu1[fw_version_index][j].c_str());
-			else if (j==selected) F2.Printf(textX,280+(j*(sizeFont+4)),COLOR_YELLOW,"%s",menu1[fw_version_index][j].c_str());
-			else F2.Printf(textX,280+(j*(sizeFont+4)),COLOR_WHITE,"%s",menu1[fw_version_index][j].c_str());
+			if (j==choosed) F3.Printf(center_text_x(Graphics, sizeFont, menu1[fw_version_index][j].c_str()),280+(j*(sizeFont+4)),COLOR_RED,sizeFont, "%s",menu1[fw_version_index][j].c_str());
+			else if (j==selected) F3.Printf(center_text_x(Graphics, sizeFont, menu1[fw_version_index][j].c_str()),280+(j*(sizeFont+4)),COLOR_YELLOW,sizeFont, "%s",menu1[fw_version_index][j].c_str());
+			else F2.Printf(center_text_x(Graphics, sizeFont, menu1[fw_version_index][j].c_str()),280+(j*(sizeFont+4)),COLOR_WHITE,sizeFont, "%s",menu1[fw_version_index][j].c_str());
 		}
-		F2.Printf(textX,280+((menu1_size[fw_version_index]+1)*(sizeFont+4)),COLOR_WHITE,"                 Press START to exit                ");
+		F2.Printf(center_text_x(Graphics, sizeFont, "Press START to exit"),280+((menu1_size[fw_version_index]+1)*(sizeFont+4)),COLOR_WHITE,sizeFont, "Press START to exit");
 		cury=280+((menu1_size[fw_version_index]+2)*(sizeFont+4));
 	}
 	else if (menu_id==2)
 	{
-		F1.Printf(textX,220, 0xd38900,	" CHOOSE WHAT TO INSTALL");
+		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE WHAT TO INSTALL"),220, 0xd38900, sizeTitleFont, "CHOOSE WHAT TO INSTALL");
 		for(int j=0;j<menu2_size;j++)
 		{
-			if (j==choosed) F2.Printf(textX,280+(j*(sizeFont+4)),COLOR_RED,"%s",menu2[j].c_str());
-			else if (j==selected) F2.Printf(textX,280+(j*(sizeFont+4)),COLOR_YELLOW,"%s",menu2[j].c_str());
-			else F2.Printf(textX,280+(j*(sizeFont+4)),COLOR_WHITE,"%s",menu2[j].c_str());
+			if (j==choosed) F3.Printf(center_text_x(Graphics, sizeFont, menu2[j].c_str()),280+(j*(sizeFont+4)),COLOR_RED,sizeFont, "%s",menu2[j].c_str());
+			else if (j==selected) F3.Printf(center_text_x(Graphics, sizeFont, menu2[j].c_str()),280+(j*(sizeFont+4)),COLOR_YELLOW,sizeFont, "%s",menu2[j].c_str());
+			else F2.Printf(center_text_x(Graphics, sizeFont, menu2[j].c_str()),280+(j*(sizeFont+4)),COLOR_WHITE,sizeFont, "%s",menu2[j].c_str());
 		}
-		F2.Printf(textX,280+((menu2_size+1)*(sizeFont+4)),COLOR_WHITE,"                 Press  O to go back                ");
-		F2.Printf(textX,280+((menu2_size+2)*(sizeFont+4)),COLOR_WHITE,"                 Press START to exit                ");
+		F2.Printf(center_text_x(Graphics, sizeFont, "Press O to go back"),280+((menu2_size+1)*(sizeFont+4)),COLOR_WHITE,sizeFont, "Press O to go back");
+		F2.Printf(center_text_x(Graphics, sizeFont, "Press START to exit"),280+((menu2_size+2)*(sizeFont+4)),COLOR_WHITE,sizeFont, "Press START to exit");
 		cury=280+((menu2_size+3)*(sizeFont+4));
 	}
 
-	F2.Printf(textX,cury+30,0xc0c0c0,    "Firmware version: %s", fw_version.c_str());
-	F2.Printf(textX+300,cury+30,0xc0c0c0,    "Status: %s", status.c_str());
+	u32 textX =(Graphics->width/2)-230;
+	F2.Printf(textX,cury+30,0xc0c0c0,sizeFont,     "Firmware version: %s", fw_version.c_str());
+	F2.Printf(textX+300,cury+30,0xc0c0c0,sizeFont,     "Status: %s", status.c_str());
 	
 	Graphics->Flip();
 
@@ -245,9 +251,10 @@ s32 main(s32 argc, const char* argv[])
 	std::string menu1_val[][10]= { { "cfw", "cobra", "nfw", "rebug" }, { "cfw", "rebug" } };
 	std::string menu2_val[]={ "xmbmanpls", "pkgmanage", "original" };
 
-	int menu_position;
 	int i;
 	int ret=0;
+	int menu_position=0;
+	int menu2_position=0;
 
 	//this will initialize the controller (7= seven controllers)
 	ioPadInit (7);
@@ -257,12 +264,13 @@ s32 main(s32 argc, const char* argv[])
 	MsgDialog Mess(Graphics);
 	uint8_t platform_info[0x18];
 	lv2_get_platform_info(platform_info);
-	if (platform_info[0x00]==0x03 && platform_info[0x01]==0x05 && platform_info[0x02]==0x50)
+	uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
+	if (fw==0x30550)
 	{
 		fw_version="3.55";
 		fw_version_index=0;
 	}
-	else if (platform_info[0x00]==0x03 && platform_info[0x01]==0x04 && platform_info[0x02]==0x10)
+	else if (fw==0x30410)
 	{
 		fw_version="3.41";
 		fw_version_index=1;
@@ -319,10 +327,9 @@ s32 main(s32 argc, const char* argv[])
 	}
 
 	continue_to_menu2:
-	menu_position=0;
-	
+	menu2_position=0;	
 	menu_2:
-	draw_menu(Graphics,2,menu_position,-1,"Waiting");
+	draw_menu(Graphics,2,menu2_position,-1,"Waiting");
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -342,40 +349,40 @@ s32 main(s32 argc, const char* argv[])
 				}
 				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 				{
-					if (menu_position<menu2_size-1)
+					if (menu2_position<menu2_size-1)
 					{
-						menu_position++;
+						menu2_position++;
 						goto menu_2;
 					}
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
-					if (menu_position>0)
+					if (menu2_position>0)
 					{
-						menu_position--;
+						menu2_position--;
 						goto menu_2;
 					}
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,2,-1,menu_position,"Installing...");
-					app_choice=menu2_val[menu_position];
+					draw_menu(Graphics,2,-1,menu2_position,"Installing...");
+					app_choice=menu2_val[menu2_position];
 					sleep(0.05);
-					draw_menu(Graphics,2,menu_position,-1,"Installing...");
+					draw_menu(Graphics,2,menu2_position,-1,"Installing...");
 					ret=install(firmware_choice, app_choice);
 					if (ret == 0)
 					{
 						Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
-						//draw_menu(Graphics,2,-1,menu_position,"Installed!");
+						//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
 						//sleep(2);
-						//draw_menu(Graphics,2,-1,menu_position,"Rebooting...");
+						//draw_menu(Graphics,2,-1,menu2_position,"Rebooting...");
 						//sleep(2);
 						goto end_with_reboot;
 					}
 					else
 					{
 						Mess.Dialog(MSG_ERROR,"Not installed!\nSome error occured.");
-						draw_menu(Graphics,2,-1,menu_position,"Error!");
+						draw_menu(Graphics,2,-1,menu2_position,"Error!");
 					}
 				}
 			}
