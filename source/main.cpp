@@ -16,7 +16,7 @@
 
 std::string appname="XMBMANPLS";
 std::string APPFOLDER="/dev_hdd0/game/"+appname;
-std::string mainfolder=APPFOLDER+"/resources/";
+std::string mainfolder=APPFOLDER+"/USRDIR/resources";
 std::string fw_version;
 int fw_version_index;
 int menu1_size[]= { 4, 2 };
@@ -175,13 +175,13 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 						"RESTORE Install Package Files"
 						};
 
-	std::string IMAGE_PATH=APPFOLDER+"/resources/images/xmbm_transparent.png";
+	std::string IMAGE_PATH=mainfolder+"/images/xmbm_transparent.png";
 	//std::string IMAGE_PATH=APPFOLDER+"/ICON0.PNG";
-	//std::string TITLEFONT_PATH=APPFOLDER+"/resources/fonts/GOODTIME.ttf";
+	//std::string TITLEFONT_PATH=mainfolder+"/fonts/GOODTIME.ttf";
 	//std::string TEXTFONT_PATH="/dev_flash/data/font/SCE-PS3-SR-R-LATIN2.TTF";
-	std::string TITLEFONT_PATH=APPFOLDER+"/resources/fonts/arial.ttf";
-	std::string TEXTFONT_PATH=APPFOLDER+"/resources/fonts/arial.ttf";
-	std::string TEXTFONTBOLD_PATH=APPFOLDER+"/resources/fonts/arialbd.ttf";
+	std::string TITLEFONT_PATH=mainfolder+"/fonts/arial.ttf";
+	std::string TEXTFONT_PATH=mainfolder+"/fonts/arial.ttf";
+	std::string TEXTFONTBOLD_PATH=mainfolder+"/fonts/arialbd.ttf";
 	int cury=0;
 
 	Background B1(Graphics);
