@@ -261,6 +261,7 @@ s32 main(s32 argc, const char* argv[])
 	//this will initialize NoRSX..
 	//NoRSX *Graphics = new NoRSX(RESOLUTION_1920x1080);
 	NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
+	//NoRSX *Graphics = new NoRSX();
 	MsgDialog Mess(Graphics);
 	uint8_t platform_info[0x18];
 	lv2_get_platform_info(platform_info);
@@ -327,7 +328,7 @@ s32 main(s32 argc, const char* argv[])
 	}
 
 	continue_to_menu2:
-	menu2_position=0;	
+	menu2_position=0;
 	menu_2:
 	draw_menu(Graphics,2,menu2_position,-1,"Waiting");
 	while (1)
@@ -369,6 +370,7 @@ s32 main(s32 argc, const char* argv[])
 					app_choice=menu2_val[menu2_position];
 					sleep(0.05);
 					draw_menu(Graphics,2,menu2_position,-1,"Installing...");
+					ret=0;
 					ret=install(firmware_choice, app_choice);
 					if (ret == 0)
 					{
