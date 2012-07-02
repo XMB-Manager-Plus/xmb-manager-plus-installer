@@ -145,18 +145,20 @@ s32 install(std::string fw, std::string app)
 	//copy SPRX files
 	direct=mainfolder+"/"+fw_version+"/"+fw+"/"+app+"/sprx";
 	dp = opendir (direct.c_str());
-	if (dp == NULL) return 1;
-	//F2.Printf(textX,250,COLOR_BLUE,"Reading folder %s", direct.c_str());
-	while ( (dirp = readdir(dp) ) )
+	if (dp != NULL)
 	{
-		sourcefile = direct + "/" + dirp->d_name;
-		destfile = DEST_SPRX_FOLDER + "/" + dirp->d_name;
-		if (stat( sourcefile.c_str(), &filestat )) continue;
-		if (S_ISDIR( filestat.st_mode ))         continue;
-		copy_file(sourcefile.c_str(), destfile.c_str());
-		files_copied++;
+		//F2.Printf(textX,250,COLOR_BLUE,"Reading folder %s", direct.c_str());
+		while ( (dirp = readdir(dp) ) )
+		{
+			sourcefile = direct + "/" + dirp->d_name;
+			destfile = DEST_SPRX_FOLDER + "/" + dirp->d_name;
+			if (stat( sourcefile.c_str(), &filestat )) continue;
+			if (S_ISDIR( filestat.st_mode ))         continue;
+			copy_file(sourcefile.c_str(), destfile.c_str());
+			files_copied++;
+		}
+		closedir(dp);
 	}
-	closedir(dp);
 
 	return 0;
 }
