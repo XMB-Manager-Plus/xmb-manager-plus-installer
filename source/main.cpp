@@ -14,12 +14,13 @@
 
 #define MAX_BUFFERS 2
 
-std::string appname="XMBMANPLS";
-std::string APPFOLDER="/dev_hdd0/game/"+appname;
-std::string mainfolder=APPFOLDER+"/USRDIR/resources";
-std::string fw_version;
-int fw_version_index;
-int menu1_size[]= { 4, 2 };
+std::string mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR";
+//std::string mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR/resources";
+std::string fw_version="";
+int fw_version_index=-1;
+std::string menu1[10][10];
+std::string menu1_fwv[10];
+int menu1_size[10];
 int menu2_size = 3;
 
 static int exitapp, xmbopen;
@@ -43,6 +44,7 @@ static inline void eventHandler(u64 status, u64 param, void * userdata)
 msgType MSG_OK = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
 msgType MSG_ERROR = (msgType)(MSG_DIALOG_ERROR | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
 msgType MSG_YESNO = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DISABLE_CANCEL_ON);
+//msgType MSG_NONE = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_BTN_NONE);
 
 s32 lv2_get_platform_info(uint8_t platform_info[0x18])
 {
@@ -111,7 +113,7 @@ s32 install(std::string fw, std::string app)
 	if(is_mounted != 0)
 		sysFsMount(DEV_BLIND, FAT, MOUNT_POINT.c_str(), 0);
 	//copy XML files
-	direct=mainfolder+"/"+fw_version+"/"+fw+"/"+app+"/xml";
+	direct=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/xml";
 	dp = opendir (direct.c_str());
 	if (dp == NULL) return 1;
 	//F2.Printf(textX,250,COLOR_BLUE,"Reading folder %s", direct.c_str());
@@ -127,7 +129,7 @@ s32 install(std::string fw, std::string app)
 	closedir(dp);
 
 	//copy RCO files
-	direct=mainfolder+"/"+fw_version+"/"+fw+"/"+app+"/rco";
+	direct=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/rco";
 	dp = opendir (direct.c_str());
 	if (dp == NULL) return 1;
 	//F2.Printf(textX,250,COLOR_BLUE,"Reading folder %s", direct.c_str());
@@ -143,7 +145,7 @@ s32 install(std::string fw, std::string app)
 	closedir(dp);
 
 	//copy SPRX files
-	direct=mainfolder+"/"+fw_version+"/"+fw+"/"+app+"/sprx";
+	direct=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/sprx";
 	dp = opendir (direct.c_str());
 	if (dp != NULL)
 	{
@@ -170,20 +172,17 @@ s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
 
 s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::string status)
 {
-	std::string menu1[][10]= { { "Normal CFW", "Cobra CFW", "NFW CFW", "Rebug CFW" }, { "Normal CFW", "Rebug CFW" } };
 	std::string menu2[]    ={
 						"INSTALL XMB Manager Plus",
 						"INSTALL Rebug Package Manager",
 						"RESTORE Install Package Files"
 						};
 
-	std::string IMAGE_PATH=mainfolder+"/images/xmbm_transparent.png";
-	//std::string IMAGE_PATH=APPFOLDER+"/ICON0.PNG";
-	//std::string TITLEFONT_PATH=mainfolder+"/fonts/GOODTIME.ttf";
-	//std::string TEXTFONT_PATH="/dev_flash/data/font/SCE-PS3-SR-R-LATIN2.TTF";
-	std::string TITLEFONT_PATH=mainfolder+"/fonts/arial.ttf";
-	std::string TEXTFONT_PATH=mainfolder+"/fonts/arial.ttf";
-	std::string TEXTFONTBOLD_PATH=mainfolder+"/fonts/arialbd.ttf";
+	std::string IMAGE_PATH=mainfolder+"/data/images/xmbm_transparent.png";
+	//std::string TITLEFONT_PATH=mainfolder+"/data/fonts/GOODTIME.ttf";
+	//std::string TITLEFONT_PATH=mainfolder+"/data/fonts/arial.ttf";
+	//std::string TEXTFONT_PATH=mainfolder+"/data/fonts/arial.ttf";
+	//std::string TEXTFONTBOLD_PATH=mainfolder+"/data/fonts/arialbd.ttf";
 	int cury=0;
 
 	Background B1(Graphics);
@@ -208,6 +207,9 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 
 	if (menu_id==1)
 	{
+		F1.Printf(100,220,	0xd38900, sizeFont, "%d",menu1_size[0]);
+		F1.Printf(100,240,	0xd38900, sizeFont, "%d",menu1_size[1]);
+		F1.Printf(100,260,	0xd38900, sizeFont, "%d",fw_version_index);
 		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
 		for(int j=0;j<menu1_size[fw_version_index];j++)
 		{
@@ -250,40 +252,83 @@ s32 main(s32 argc, const char* argv[])
 	sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0, eventHandler, NULL);
 	std::string firmware_choice;
 	std::string app_choice;
-	std::string menu1_val[][10]= { { "cfw", "cobra", "nfw", "rebug" }, { "cfw", "rebug" } };
 	std::string menu2_val[]={ "xmbmanpls", "pkgmanage", "original" };
 
+	std::string dfile;
+	std::string direct;
+	DIR *dp;
+	struct dirent *dirp;
+
+
 	int i;
+	int ifwv=0;
+	int ifw=0;
 	int ret=0;
 	int menu_position=0;
 	int menu2_position=0;
 
-	//this will initialize the controller (7= seven controllers)
-	ioPadInit (7);
-	//this will initialize NoRSX..
-	//NoRSX *Graphics = new NoRSX(RESOLUTION_1920x1080);
-	NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
-	//NoRSX *Graphics = new NoRSX();
-	MsgDialog Mess(Graphics);
 	uint8_t platform_info[0x18];
 	lv2_get_platform_info(platform_info);
 	uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
-	if (fw==0x30550)
+
+	//this will initialize the controller (7= seven controllers)
+	ioPadInit (7);
+	//this will initialize NoRSX..
+	NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
+	//NoRSX *Graphics = new NoRSX();
+	MsgDialog Mess(Graphics);
+
+	//fetch available firmwares versions
+	direct=mainfolder+"/resources";
+	dp = opendir (direct.c_str());
+	if (dp == NULL) return 0;
+	while ( (dirp = readdir(dp) ) )
 	{
-		fw_version="3.55";
-		fw_version_index=0;
+		dfile = direct + "/" + dirp->d_name;
+		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+		{
+			menu1_fwv[ifwv]=dirp->d_name;
+			ifwv++;
+		}
 	}
-	else if (fw==0x30410)
+	closedir(dp);
+
+	//check if current version is supported
+	if (fw==0x30560) fw_version="3.56";
+	else if (fw==0x30550) fw_version="3.55";
+	else if (fw==0x30410) fw_version="3.41";
+	else if (fw==0x30150) fw_version="3.15";
+	for (int h=0; h<ifwv; h++)
 	{
-		fw_version="3.41";
-		fw_version_index=1;
+		if (fw_version==menu1_fwv[h]) fw_version_index=h;
 	}
-	else
+	if (fw_version=="" || fw_version_index==-1)
 	{
-		Mess.Dialog(MSG_ERROR,"Only 3.55 and 3.41 firmware supported.");
+		Mess.Dialog(MSG_ERROR,"Your firmware version is not supported.");
 		goto end;
 	}
 
+	//fetch available firmwares per version
+	for (int h=0; h<ifwv; h++)
+	{
+		ifw=0;
+		direct=mainfolder+"/resources/"+menu1_fwv[h];
+		dp = opendir (direct.c_str());
+		if (dp == NULL) return 0;
+		while ( (dirp = readdir(dp) ) )
+		{
+			dfile = direct + "/" + dirp->d_name;
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				menu1[h][ifw]=dirp->d_name;
+				ifw++;
+			}
+		}
+		closedir(dp);
+		menu1_size[h]= ifw;
+	}
+
+	//Start first menu
 	menu_position=0;
 	menu_1:
 	draw_menu(Graphics,1,menu_position,-1,"Waiting");
@@ -319,7 +364,7 @@ s32 main(s32 argc, const char* argv[])
 				if (paddata.BTN_CROSS)
 				{
 					draw_menu(Graphics,1,-1,menu_position,"Waiting");
-					firmware_choice=menu1_val[fw_version_index][menu_position];
+					firmware_choice=menu1[fw_version_index][menu_position];
 					sleep(0.05);
 					goto continue_to_menu2;
 				}
@@ -329,6 +374,7 @@ s32 main(s32 argc, const char* argv[])
 		sysUtilCheckCallback();
 	}
 
+	//Start second menu
 	continue_to_menu2:
 	menu2_position=0;
 	menu_2:
