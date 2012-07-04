@@ -15,7 +15,7 @@
 
 #define MAX_BUFFERS 2
 
-std::string mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR";
+std::string mainfolder;
 //std::string mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR/resources";
 std::string fw_version="";
 int fw_version_index=-1;
@@ -286,7 +286,7 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 	return 0;
 }
 
-s32 main(s32 argc, const char* argv[])
+s32 main(s32 argc, char* argv[])
 {
 	//this is the structure for the pad controllers
 	padInfo padinfo;
@@ -300,7 +300,8 @@ s32 main(s32 argc, const char* argv[])
 	DIR *dp;
 	struct dirent *dirp;
 
-//	const char* curpath=getcwd_string();
+	int mcount=0;
+	char * pch;
 
 	int i;
 	int ifwv=0;
@@ -320,8 +321,17 @@ s32 main(s32 argc, const char* argv[])
 	NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
 	//NoRSX *Graphics = new NoRSX();
 	MsgDialog Mess(Graphics);
+	
+	//Get main folder
+	pch = strtok (argv[0],"/");
+	while (pch != NULL)
+	{
+		if (mcount<4) mainfolder=mainfolder+"/"+pch;
+		mcount++;
+		pch = strtok (NULL,"/");
+	}
+	//mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR";
 
-	//Mess.Dialog(MSG_OK,curpath);
 
 	//fetch available firmwares versions
 	direct=mainfolder+"/resources";
