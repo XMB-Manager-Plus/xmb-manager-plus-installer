@@ -11,6 +11,7 @@
 #include <sys/file.h>
 #include <sys/types.h>
 #include <string>
+#include <time.h>
 
 #define MAX_BUFFERS 2
 
@@ -18,10 +19,15 @@ std::string mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR";
 //std::string mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR/resources";
 std::string fw_version="";
 int fw_version_index=-1;
-int menu1_size = 4;
+std::string menu1[]={"INSTALL XMB Manager Plus", "INSTALL Rebug Package Manager","RESTORE a backup","Exit to XMB"};
+std::string menu1_val[]={ "xmbmanpls", "pkgmanage", "restore", "exit" };
+int menu1_size=4;
+int menu1_restore=1;
 std::string menu2[10][10];
 std::string menu2_fwv[10];
 int menu2_size[10];
+std::string menu3[30];
+int menu3_size=0;
 
 static int exitapp, xmbopen;
 
@@ -62,107 +68,144 @@ s32 sysFsUnmount(const char* PATH_TO_UNMOUNT){
           return_to_user_prog(s32);
 }
 
-s32 copy_file(const char* cfrom, const char* ctoo)
+/*const char *getcwd_string( void )
+{
+	char *path=NULL;
+	size_t size;
+	path=getcwd(path,size);
+
+   return path;
+}*/
+
+std::string copy_file(const char* cfrom, const char* ctoo)
 {
   FILE *from, *to;
   char ch;
 
   /* open source file */
-  if((from = fopen(cfrom, "rb"))==NULL) return 1;
+  if((from = fopen(cfrom, "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
 
   /* open destination file */
-  if((to = fopen(ctoo, "wb"))==NULL) return 1;
+  if((to = fopen(ctoo, "wb"))==NULL) return "Cannot open destination file ("+(std::string)ctoo+") for writing!";
 
   /* copy the file */
   while(!feof(from)) {
     ch = fgetc(from);
-    if(ferror(from))  return 1;
+    if(ferror(from))  return "Error reading source file ("+(std::string)cfrom+")!";
     if(!feof(from)) fputc(ch, to);
-    if(ferror(to))  return 1;
+    if(ferror(to))  return "Error writing destination file ("+(std::string)ctoo+")!";
   }
 
-  if(fclose(from)==EOF) return 1;
+  if(fclose(from)==EOF) return "Cannot close source file ("+(std::string)cfrom+")!";
 
-  if(fclose(to)==EOF) return 1;
+  if(fclose(to)==EOF) return "Cannot close destination file ("+(std::string)ctoo+")!";
 
-  return 0;
+  return "";
 }
 
-s32 install(std::string fw, std::string app)
+// Get current date/time, format is YYYY-MM-DD.HH:mm:ss
+const std::string currentDateTime()
+{
+    time_t     now = time(0);
+    struct tm  tstruct;
+    char       buf[80];
+    tstruct = *localtime(&now);
+    // Visit http://www.cplusplus.com/reference/clibrary/ctime/strftime/
+    // for more information about date/time format
+    strftime(buf, sizeof(buf), "%Y-%m-%d.%H-%M-%S", &tstruct);
+
+    return buf;
+}
+
+s32 create_dir(std::string dirtocreate)
+{
+	return mkdir(dirtocreate.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+}
+
+std::string doit(NoRSX *Graphics, std::string operation, std::string restorefolder, std::string fw, std::string app)
 {
 	const char* DEV_BLIND = "CELL_FS_IOS:BUILTIN_FLSH1";	// dev_flash
 	const char* FAT = "CELL_FS_FAT"; //it's also for fat32
-	std::string MOUNT_POINT = "/dev_blind"; //our mount point
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
 
 	//we may need to check if it is already mounted:
 	sysFSStat dir;
 
-	std::string direct;
-	std::string sourcefile;
-	std::string destfile;
+	std::string foldername;
+
 	DIR *dp;
 	struct dirent *dirp;
-	struct stat filestat;
 
-	std::string DEST_RCO_FOLDER=MOUNT_POINT+"/vsh/resource";
-	std::string DEST_XML_FOLDER=MOUNT_POINT+"/vsh/resource/explore/xmb";
-	std::string DEST_SPRX_FOLDER=MOUNT_POINT+"/vsh/module";
-	int files_copied=0;
+	std::string flash[]={"rco","xml","sprx"};
+	std::string flash_paths[]={(std::string)MOUNT_POINT+"/vsh/resource", (std::string)MOUNT_POINT+"/vsh/resource/explore/xmb", (std::string)MOUNT_POINT+"/vsh/module"};
+	std::string source_paths[3];
+	std::string dest_paths[3];
+	std::string check_paths[3];
+	std::string check_path;
+	std::string sourcefile;
+	std::string destfile;
 
-	int is_mounted = sysFsStat(MOUNT_POINT.c_str(), &dir);
-	if(is_mounted != 0)
-		sysFsMount(DEV_BLIND, FAT, MOUNT_POINT.c_str(), 0);
-	//copy XML files
-	direct=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/xml";
-	dp = opendir (direct.c_str());
-	if (dp == NULL) return 1;
-	//F2.Printf(textX,250,COLOR_BLUE,"Reading folder %s", direct.c_str());
-	while ( (dirp = readdir(dp) ) )
+	std::string ret="";
+	MsgDialog Messa(Graphics);
+
+	int is_mounted = sysFsStat(MOUNT_POINT, &dir);
+	if (is_mounted != 0) sysFsMount(DEV_BLIND, FAT, MOUNT_POINT, 0);
+	is_mounted = sysFsStat(MOUNT_POINT, &dir);
+	if (is_mounted != 0) return "Dev_blind not mounted!";
+	if (operation=="backup")
 	{
-		sourcefile = direct + "/" + dirp->d_name;
-		destfile = DEST_XML_FOLDER + "/" + dirp->d_name;
-		if (stat( sourcefile.c_str(), &filestat )) continue;
-		if (S_ISDIR( filestat.st_mode ))         continue;
-		copy_file(sourcefile.c_str(), destfile.c_str());
-		files_copied++;
+		foldername=currentDateTime();
+		create_dir(mainfolder+"/backups");
+		create_dir(mainfolder+"/backups/" + foldername);
+		for(int j=0;j<3;j++)
+		{
+			create_dir(mainfolder+"/backups/" + foldername+"/"+flash[j]);
+			create_dir(mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j]);
+			source_paths[j]=flash_paths[j];
+			check_paths[j]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j];
+			dest_paths[j]=mainfolder+"/backups/"+foldername+"/"+flash[j];
+		}
 	}
-	closedir(dp);
-
-	//copy RCO files
-	direct=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/rco";
-	dp = opendir (direct.c_str());
-	if (dp == NULL) return 1;
-	//F2.Printf(textX,250,COLOR_BLUE,"Reading folder %s", direct.c_str());
-	while ( (dirp = readdir(dp) ) )
+	else if (operation=="restore")
 	{
-		sourcefile = direct + "/" + dirp->d_name;
-		destfile = DEST_RCO_FOLDER + "/" + dirp->d_name;
-		if (stat( sourcefile.c_str(), &filestat )) continue;
-		if (S_ISDIR( filestat.st_mode ))         continue;
-		copy_file(sourcefile.c_str(), destfile.c_str());
-		files_copied++;
+		for(int j=0;j<3;j++)
+		{
+			source_paths[j]=mainfolder+"/backups/"+restorefolder+"/"+flash[j];
+			dest_paths[j]=flash_paths[j];
+		}
 	}
-	closedir(dp);
-
-	//copy SPRX files
-	direct=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/sprx";
-	dp = opendir (direct.c_str());
-	if (dp != NULL)
+	else if (operation=="install")
 	{
-		//F2.Printf(textX,250,COLOR_BLUE,"Reading folder %s", direct.c_str());
+		for(int j=0;j<3;j++)
+		{
+			create_dir(mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j]);
+			source_paths[j]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j];
+			dest_paths[j]=flash_paths[j];
+		}
+	}
+	
+	//copy files
+	for(int j=0;j<3;j++)
+	{
+		if (operation=="backup") check_path=check_paths[j];
+		else check_path=source_paths[j];
+		dp = opendir (check_path.c_str());
+		if (dp == NULL) return "Cannot open directory "+check_path;
 		while ( (dirp = readdir(dp) ) )
 		{
-			sourcefile = direct + "/" + dirp->d_name;
-			destfile = DEST_SPRX_FOLDER + "/" + dirp->d_name;
-			if (stat( sourcefile.c_str(), &filestat )) continue;
-			if (S_ISDIR( filestat.st_mode ))         continue;
-			copy_file(sourcefile.c_str(), destfile.c_str());
-			files_copied++;
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				sourcefile=source_paths[j]+"/"+dirp->d_name;
+				destfile=dest_paths[j]+"/"+dirp->d_name;
+				ret=copy_file(sourcefile.c_str(), destfile.c_str());
+				//Messa.Dialog(MSG_OK,("Operation: "+operation+"\n\nopen: "+check_path+"\n\nfrom: "+sourcefile+"\nto: "+destfile+"\n\nreturn: "+ret).c_str());
+				if (ret != "") return ret;
+			}
 		}
 		closedir(dp);
 	}
 
-	return 0;
+	return "";
 }
 
 s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
@@ -172,13 +215,6 @@ s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
 
 s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::string status)
 {
-	std::string menu1[]    ={
-						"INSTALL XMB Manager Plus",
-						"INSTALL Rebug Package Manager",
-						"RESTORE a backup",
-						"Exit to XMB"
-						};
-
 	std::string IMAGE_PATH=mainfolder+"/data/images/xmbm_transparent.png";
 	int posy=0;
 
@@ -195,6 +231,7 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 	I1.AlphaDrawIMG(imgX,imgY,&png);
 	int sizeTitleFont = 30;
 	int sizeFont = 25;
+	int menu_color;
 	Font F1(LATIN2, Graphics);
 	Font F2(LATIN2, Graphics);
 
@@ -204,11 +241,14 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE WHAT TO INSTALL"),220, 0xd38900, sizeTitleFont, "CHOOSE WHAT TO INSTALL");
 		for(int j=0;j<menu1_size;j++)
 		{
+			
 			if (j<menu1_size-1) posy=posy+sizeFont+4;
 			else posy=posy+(2*(sizeFont+4));
-			if (j==choosed) F2.Printf(center_text_x(Graphics, sizeFont, menu1[j].c_str()),posy,COLOR_RED,sizeFont, "%s",menu1[j].c_str());
-			else if (j==selected) F2.Printf(center_text_x(Graphics, sizeFont, menu1[j].c_str()),posy,COLOR_YELLOW,sizeFont, "%s",menu1[j].c_str());
-			else F2.Printf(center_text_x(Graphics, sizeFont, menu1[j].c_str()),posy,COLOR_WHITE,sizeFont, "%s",menu1[j].c_str());
+			if (j==choosed) menu_color=COLOR_RED;
+			else if (j==selected) menu_color=COLOR_YELLOW;
+			else menu_color=COLOR_WHITE;
+			if (j==2 && menu1_restore==0) menu_color=COLOR_GREY;
+			F2.Printf(center_text_x(Graphics, sizeFont, menu1[j].c_str()),posy,menu_color,sizeFont, "%s",menu1[j].c_str());
 		}
 	}
 	else if (menu_id==2)
@@ -218,9 +258,23 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 		{
 			if (j<menu2_size[fw_version_index]-1) posy=posy+sizeFont+4;
 			else posy=posy+(2*(sizeFont+4));
-			if (j==choosed) F2.Printf(center_text_x(Graphics, sizeFont, menu2[fw_version_index][j].c_str()),posy,COLOR_RED,sizeFont, "%s",menu2[fw_version_index][j].c_str());
-			else if (j==selected) F2.Printf(center_text_x(Graphics, sizeFont, menu2[fw_version_index][j].c_str()),posy,COLOR_YELLOW,sizeFont, "%s",menu2[fw_version_index][j].c_str());
-			else F2.Printf(center_text_x(Graphics, sizeFont, menu2[fw_version_index][j].c_str()),posy,COLOR_WHITE,sizeFont, "%s",menu2[fw_version_index][j].c_str());
+			if (j==choosed) menu_color=COLOR_RED;
+			else if (j==selected) menu_color=COLOR_YELLOW;
+			else menu_color=COLOR_WHITE;
+			F2.Printf(center_text_x(Graphics, sizeFont, menu2[fw_version_index][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[fw_version_index][j].c_str());
+		}
+	}
+	else if (menu_id==3)
+	{
+		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),220,	0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
+		for(int j=0;j<menu3_size;j++)
+		{
+			if (j<menu3_size-1) posy=posy+sizeFont+4;
+			else posy=posy+(2*(sizeFont+4));
+			if (j==choosed) menu_color=COLOR_RED;
+			else if (j==selected) menu_color=COLOR_YELLOW;
+			else menu_color=COLOR_WHITE;
+			F2.Printf(center_text_x(Graphics, sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
 		}
 	}
 	u32 textX =(Graphics->width/2)-230;
@@ -241,20 +295,20 @@ s32 main(s32 argc, const char* argv[])
 	sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0, eventHandler, NULL);
 	std::string firmware_choice;
 	std::string app_choice;
-	std::string menu1_val[]={ "xmbmanpls", "pkgmanage", "original", "exit" };
-
 	std::string dfile;
 	std::string direct;
 	DIR *dp;
 	struct dirent *dirp;
 
+//	const char* curpath=getcwd_string();
 
 	int i;
 	int ifwv=0;
 	int ifw=0;
-	int ret=0;
+	std::string ret="";
 	int menu1_position=0;
 	int menu2_position=0;
+	int menu3_position=0;
 
 	uint8_t platform_info[0x18];
 	lv2_get_platform_info(platform_info);
@@ -266,6 +320,8 @@ s32 main(s32 argc, const char* argv[])
 	NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
 	//NoRSX *Graphics = new NoRSX();
 	MsgDialog Mess(Graphics);
+
+	//Mess.Dialog(MSG_OK,curpath);
 
 	//fetch available firmwares versions
 	direct=mainfolder+"/resources";
@@ -322,7 +378,10 @@ s32 main(s32 argc, const char* argv[])
 
 	//Start second menu
 	menu1_position=0;
+	
 	menu_1:
+	if (opendir ((mainfolder+"/backups").c_str()) == NULL) menu1_restore=0;
+	else menu1_restore=1;
 	draw_menu(Graphics,1,menu1_position,-1,"Waiting");
 	while (1)
 	{
@@ -339,6 +398,7 @@ s32 main(s32 argc, const char* argv[])
 					if (menu1_position<menu1_size-1)
 					{
 						menu1_position++;
+						if (menu1_position==2 && menu1_restore==0) menu1_position++;
 						goto menu_1;
 					}
 				}
@@ -347,6 +407,7 @@ s32 main(s32 argc, const char* argv[])
 					if (menu1_position>0)
 					{
 						menu1_position--;
+						if (menu1_position==2 && menu1_restore==0) menu1_position--;
 						goto menu_1;
 					}
 				}
@@ -361,8 +422,7 @@ s32 main(s32 argc, const char* argv[])
 					}
 					else if (menu1_position<menu1_size-1)
 					{
-						//goto continue_to_menu3;
-						goto menu_1;
+						goto continue_to_menu3;
 					}
 					else if (menu1_position<menu1_size)
 					{
@@ -375,7 +435,6 @@ s32 main(s32 argc, const char* argv[])
 	}
 
 	continue_to_menu2:
-	//Start first menu
 	menu2_position=0;
 	menu_2:
 	draw_menu(Graphics,2,menu2_position,-1,"Waiting");
@@ -410,30 +469,120 @@ s32 main(s32 argc, const char* argv[])
 				{
 					if (menu2_position<menu2_size[fw_version_index]-1)
 					{
-						draw_menu(Graphics,2,-1,menu2_position,"Installing...");
 						firmware_choice=menu2[fw_version_index][menu2_position];
+						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
 						sleep(0.05);
-						draw_menu(Graphics,2,menu2_position,-1,"Installing...");
-						ret=0;
-						ret=install(firmware_choice, app_choice);
-						if (ret == 0)
+						draw_menu(Graphics,2,menu2_position,-1,"Making backup...");
+						ret="";
+						ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
+						if (ret == "")
 						{
-							Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
+							draw_menu(Graphics,2,menu2_position,-1,"Installing...");
+							ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
+							if (ret == "")
+							{
+								draw_menu(Graphics,2,menu2_position,-1,"Waiting");
+								Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
+								//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
+								//sleep(2);
+								//draw_menu(Graphics,2,-1,menu2_position,"Rebooting...");
+								//sleep(2);
+								goto end_with_reboot;
+							}
+						}
+						Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
+						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
+						sleep(0.05);
+						goto menu_2;
+					}
+					else
+					{
+						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
+						sleep(0.05);
+						goto menu_1;
+					}
+				}
+			}
+		}
+		
+		sysUtilCheckCallback();
+	}
+
+	continue_to_menu3:
+	menu3_size=0;
+	direct=mainfolder+"/backups";
+	dp = opendir (direct.c_str());
+	if (dp == NULL) return 0;
+	while ( (dirp = readdir(dp) ) )
+	{
+		dfile = direct + "/" + dirp->d_name;
+		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+		{
+			menu3[menu3_size]=dirp->d_name;
+			menu3_size++;
+		}
+	}
+	closedir(dp);
+	menu3[menu3_size]="Back to main menu";
+	menu3_size++;
+	menu3_position=0;
+	menu_3:
+	draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+	while (1)
+	{
+		ioPadGetInfo (&padinfo);
+		//this will wait for a START from any pad
+		for(i = 0; i < MAX_PADS; i++)
+		{
+			if (padinfo.status[i])
+			{
+				ioPadGetData (i, &paddata);
+				//if (paddata.BTN_START) goto end;
+				if (paddata.BTN_CIRCLE) goto menu_1;
+				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
+				{
+					if (menu3_position<menu3_size-1)
+					{
+						menu3_position++;
+						goto menu_3;
+					}
+				}
+				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
+				{
+					if (menu3_position>0)
+					{
+						menu3_position--;
+						goto menu_3;
+					}
+				}
+				if (paddata.BTN_CROSS)
+				{
+					if (menu3_position<menu3_size-1)
+					{
+						//restore
+						draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+						sleep(0.05);
+						draw_menu(Graphics,3,menu3_position,-1,"Restoring...");
+						ret="";
+						ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
+						if (ret == "")
+						{
+							draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+							Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
 							//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
 							//sleep(2);
 							//draw_menu(Graphics,2,-1,menu2_position,"Rebooting...");
 							//sleep(2);
 							goto end_with_reboot;
 						}
-						else
-						{
-							Mess.Dialog(MSG_ERROR,"Not installed!\nSome error occured.");
-							draw_menu(Graphics,2,-1,menu2_position,"Error!");
-						}
+						Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
+						draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+						sleep(0.05);
+						goto menu_3;
 					}
 					else
 					{
-						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
+						draw_menu(Graphics,3,-1,menu3_position,"Waiting");
 						sleep(0.05);
 						goto menu_1;
 					}
