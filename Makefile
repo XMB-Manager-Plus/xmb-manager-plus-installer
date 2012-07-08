@@ -103,8 +103,7 @@ export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
 export INCLUDE	:=	$(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
 					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
 					$(LIBPSL1GHT_INC) \
-					-I$(CURDIR)/$(BUILD) \
-					-I$(LIBDIRS)/include/freetype2
+					-I$(CURDIR)/$(BUILD)
 
 #---------------------------------------------------------------------------------
 # build a list of library paths
@@ -114,7 +113,6 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
 .PHONY: $(BUILD) clean
-
 #---------------------------------------------------------------------------------
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
@@ -124,14 +122,11 @@ $(BUILD):
 clean:
 	@echo clean ...
 	@rm -fr $(BUILD) *.elf *.self *.pkg
-
+#---------------------------------------------------------------------------------
+pkg:	$(BUILD) $(OUTPUT).pkg
 #---------------------------------------------------------------------------------
 run:
 	ps3load $(OUTPUT).self
-
-#---------------------------------------------------------------------------------
-pkg:	$(BUILD) $(OUTPUT).pkg
-
 #---------------------------------------------------------------------------------
 else
 

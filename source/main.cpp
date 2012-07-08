@@ -1,4 +1,5 @@
 #include <ppu-lv2.h>
+#include <lv2/sysfs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <io/pad.h>
@@ -12,16 +13,17 @@
 #include <sys/types.h>
 #include <string>
 #include <time.h>
+#include <errno.h>
 
 #define MAX_BUFFERS 2
 
 std::string mainfolder;
-//std::string mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR/resources";
 std::string fw_version="";
 int fw_version_index=-1;
-std::string menu1[]={"INSTALL XMB Manager Plus", "INSTALL Rebug Package Manager","RESTORE a backup","Exit to XMB"};
-std::string menu1_val[]={ "xmbmanpls", "pkgmanage", "restore", "exit" };
-int menu1_size=4;
+//std::string menu1[]={"INSTALL XMB Manager Plus", "INSTALL Rebug Package Manager","RESTORE a backup","Exit to XMB"};
+//std::string menu1_val[]={ "xmbmanpls", "pkgmanage", "restore", "exit" };
+std::string menu1[10];
+int menu1_size=0;
 int menu1_restore=1;
 std::string menu2[10][10];
 std::string menu2_fwv[10];
@@ -68,15 +70,6 @@ s32 sysFsUnmount(const char* PATH_TO_UNMOUNT){
           return_to_user_prog(s32);
 }
 
-/*const char *getcwd_string( void )
-{
-	char *path=NULL;
-	size_t size;
-	path=getcwd(path,size);
-
-   return path;
-}*/
-
 std::string copy_file(const char* cfrom, const char* ctoo)
 {
   FILE *from, *to;
@@ -103,6 +96,41 @@ std::string copy_file(const char* cfrom, const char* ctoo)
   return "";
 }
 
+std::string create_file(const char* cpath)
+{
+  FILE *path;
+
+  /* open destination file */
+  if((path = fopen(cpath, "wb"))==NULL) return "Cannot open file ("+(std::string)cpath+") for writing!";
+  if(fclose(path)==EOF) return "Cannot close file ("+(std::string)cpath+")!";
+
+  return "";
+}
+
+int exists(const char *path)
+{
+	sysFSStat info;
+
+	if (sysFsStat(path, &info) >= 0) return 1;
+	return 0;
+}
+
+
+const std::string fileCreatedDateTime(const char *path)
+{
+	time_t tmod;
+	char buf[80];
+	sysFSStat info;
+
+	if (sysFsStat(path, &info) >= 0)
+	{
+		tmod=info.st_mtime;
+		strftime(buf, sizeof(buf), "%Y-%m-%d %Hh%Mm%Ss", localtime(&tmod));
+		return buf;
+	}
+	else return "";
+}
+
 // Get current date/time, format is YYYY-MM-DD.HH:mm:ss
 const std::string currentDateTime()
 {
@@ -112,7 +140,7 @@ const std::string currentDateTime()
     tstruct = *localtime(&now);
     // Visit http://www.cplusplus.com/reference/clibrary/ctime/strftime/
     // for more information about date/time format
-    strftime(buf, sizeof(buf), "%Y-%m-%d.%H-%M-%S", &tstruct);
+    strftime(buf, sizeof(buf), "%Y-%m-%d %Hh%Mm%Ss", &tstruct);
 
     return buf;
 }
@@ -120,6 +148,43 @@ const std::string currentDateTime()
 s32 create_dir(std::string dirtocreate)
 {
 	return mkdir(dirtocreate.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+}
+
+std::string recursiveDelete(NoRSX *Graphics, std::string direct)
+{
+	std::string dfile;
+	DIR *dp;
+	struct dirent *dirp;
+
+	MsgDialog Messa(Graphics);
+
+	dp = opendir (direct.c_str());
+	if (dp != NULL)
+	{
+		while ((dirp = readdir (dp)))
+		{
+			dfile = direct + "/" + dirp->d_name;
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				//Messa.Dialog(MSG_OK,("Testing: "+dfile).c_str());
+				if (dirp->d_type == DT_DIR)
+				{
+					//Messa.Dialog(MSG_OK,("Is directory: "+dfile).c_str());
+					recursiveDelete(Graphics,dfile);
+				}
+				else
+				{
+					//Messa.Dialog(MSG_OK,("Deleting file: "+dfile).c_str());
+					if ( sysFsUnlink(dfile.c_str()) != 0) return "Couldn't delete file "+dfile+"\n"+strerror(errno);
+				}
+			}
+		}
+		(void) closedir (dp);
+	}
+	else return "Couldn't open the directory";
+	//Messa.Dialog(MSG_OK,("Deleting folder: "+direct).c_str());
+	if ( rmdir(direct.c_str()) != 0) return "Couldn't delete directory "+direct+"\n"+strerror(errno);
+	return "";
 }
 
 std::string doit(NoRSX *Graphics, std::string operation, std::string restorefolder, std::string fw, std::string app)
@@ -154,16 +219,17 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	if (is_mounted != 0) return "Dev_blind not mounted!";
 	if (operation=="backup")
 	{
+		create_file((flash_paths[1]+"/xmbmp.cfg").c_str());
 		foldername=currentDateTime();
 		create_dir(mainfolder+"/backups");
-		create_dir(mainfolder+"/backups/" + foldername);
+		create_dir(mainfolder+"/backups/" + foldername+" Before "+app);
 		for(int j=0;j<3;j++)
 		{
-			create_dir(mainfolder+"/backups/" + foldername+"/"+flash[j]);
+			create_dir(mainfolder+"/backups/" + foldername+" Before "+app+"/"+flash[j]);
 			create_dir(mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j]);
 			source_paths[j]=flash_paths[j];
 			check_paths[j]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j];
-			dest_paths[j]=mainfolder+"/backups/"+foldername+"/"+flash[j];
+			dest_paths[j]=mainfolder+"/backups/"+foldername+" Before "+app+"/"+flash[j];
 		}
 	}
 	else if (operation=="restore")
@@ -234,6 +300,7 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 	int menu_color;
 	Font F1(LATIN2, Graphics);
 	Font F2(LATIN2, Graphics);
+	std::string menu1_text;
 
 	posy=260;
 	if (menu_id==1)
@@ -247,8 +314,11 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 			if (j==choosed) menu_color=COLOR_RED;
 			else if (j==selected) menu_color=COLOR_YELLOW;
 			else menu_color=COLOR_WHITE;
-			if (j==2 && menu1_restore==0) menu_color=COLOR_GREY;
-			F2.Printf(center_text_x(Graphics, sizeFont, menu1[j].c_str()),posy,menu_color,sizeFont, "%s",menu1[j].c_str());
+			if (j==menu1_size-2 && menu1_restore==0) menu_color=COLOR_GREY;
+			if (j<menu1_size-2) menu1_text="INSTALL "+menu1[j];
+			else menu1_text=menu1[j];
+
+			F2.Printf(center_text_x(Graphics, sizeFont, menu1_text.c_str()),posy,menu_color,sizeFont, "%s",menu1_text.c_str());
 		}
 	}
 	else if (menu_id==2)
@@ -269,7 +339,7 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),220,	0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
 		for(int j=0;j<menu3_size;j++)
 		{
-			if (j<menu3_size-1) posy=posy+sizeFont+4;
+			if (j<menu3_size-2) posy=posy+sizeFont+4;
 			else posy=posy+(2*(sizeFont+4));
 			if (j==choosed) menu_color=COLOR_RED;
 			else if (j==selected) menu_color=COLOR_YELLOW;
@@ -302,10 +372,12 @@ s32 main(s32 argc, char* argv[])
 
 	int mcount=0;
 	char * pch;
+	std::string ps3loadtid="PS3LOAD00";
 
 	int i;
 	int ifwv=0;
 	int ifw=0;
+	int iapp=0;
 	std::string ret="";
 	int menu1_position=0;
 	int menu2_position=0;
@@ -326,12 +398,23 @@ s32 main(s32 argc, char* argv[])
 	pch = strtok (argv[0],"/");
 	while (pch != NULL)
 	{
-		if (mcount<4) mainfolder=mainfolder+"/"+pch;
+		if (mcount<4) 
+		{
+			if (pch==ps3loadtid) mainfolder=mainfolder+"/XMBMANPLS";
+			else mainfolder=mainfolder+"/"+pch;
+		}
 		mcount++;
 		pch = strtok (NULL,"/");
 	}
-	//mainfolder="/dev_hdd0/game/XMBMANPLS/USRDIR";
 
+	//DETECT FIRMWARE CHANGES WERE
+	if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")==0 && exists((mainfolder+"/backups").c_str())==1)
+	{
+		Mess.Dialog(MSG_OK,"The system detected a firmware change. All previous backups will be deleted.");
+		ret=recursiveDelete(Graphics, mainfolder+"/backups");
+		if (ret == "") Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
+		else Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
+	}
 
 	//fetch available firmwares versions
 	direct=mainfolder+"/resources";
@@ -385,6 +468,26 @@ s32 main(s32 argc, char* argv[])
 		menu2_size[h]= ifw;
 	}
 
+	//fetch available apps
+	iapp=0;
+	direct=mainfolder+"/resources/"+menu2_fwv[0]+"/"+menu2[0][0];
+	dp = opendir (direct.c_str());
+	if (dp == NULL) return 0;
+	while ( (dirp = readdir(dp) ) )
+	{
+		dfile = direct + "/" + dirp->d_name;
+		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+		{
+			menu1[iapp]=dirp->d_name;
+			iapp++;
+		}
+	}
+	closedir(dp);
+	menu1[iapp]="RESTORE a backup";
+	iapp++;
+	menu1[iapp]="Exit to XMB";
+	iapp++;
+	menu1_size= iapp;
 
 	//Start second menu
 	menu1_position=0;
@@ -411,6 +514,11 @@ s32 main(s32 argc, char* argv[])
 						if (menu1_position==2 && menu1_restore==0) menu1_position++;
 						goto menu_1;
 					}
+					else
+					{
+						menu1_position=0;
+						goto menu_1;
+					}
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
@@ -420,6 +528,11 @@ s32 main(s32 argc, char* argv[])
 						if (menu1_position==2 && menu1_restore==0) menu1_position--;
 						goto menu_1;
 					}
+					else
+					{
+						menu1_position=menu1_size-1;
+						goto menu_1;
+					}
 				}
 				if (paddata.BTN_CROSS)
 				{
@@ -427,7 +540,7 @@ s32 main(s32 argc, char* argv[])
 					sleep(0.05);
 					if (menu1_position<menu1_size-2)
 					{
-						app_choice=menu1_val[menu1_position];
+						app_choice=menu1[menu1_position];
 						goto continue_to_menu2;
 					}
 					else if (menu1_position<menu1_size-1)
@@ -466,12 +579,22 @@ s32 main(s32 argc, char* argv[])
 						menu2_position++;
 						goto menu_2;
 					}
+					else
+					{
+						menu2_position=0;
+						goto menu_2;
+					}
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
 					if (menu2_position>0)
 					{
 						menu2_position--;
+						goto menu_2;
+					}
+					else
+					{
+						menu2_position=menu2_size[fw_version_index]-1;
 						goto menu_2;
 					}
 				}
@@ -533,6 +656,8 @@ s32 main(s32 argc, char* argv[])
 		}
 	}
 	closedir(dp);
+	menu3[menu3_size]="DELETE all backups";
+	menu3_size++;
 	menu3[menu3_size]="Back to main menu";
 	menu3_size++;
 	menu3_position=0;
@@ -556,6 +681,11 @@ s32 main(s32 argc, char* argv[])
 						menu3_position++;
 						goto menu_3;
 					}
+					else
+					{
+						menu3_position=0;
+						goto menu_3;
+					}
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
@@ -564,14 +694,18 @@ s32 main(s32 argc, char* argv[])
 						menu3_position--;
 						goto menu_3;
 					}
+					else
+					{
+						menu3_position=menu3_size-1;
+						goto menu_3;
+					}
 				}
 				if (paddata.BTN_CROSS)
 				{
-					if (menu3_position<menu3_size-1)
+					draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+					sleep(0.05);
+					if (menu3_position<menu3_size-2) //Restore a backup
 					{
-						//restore
-						draw_menu(Graphics,3,-1,menu3_position,"Waiting");
-						sleep(0.05);
 						draw_menu(Graphics,3,menu3_position,-1,"Restoring...");
 						ret="";
 						ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
@@ -579,10 +713,6 @@ s32 main(s32 argc, char* argv[])
 						{
 							draw_menu(Graphics,3,menu3_position,-1,"Waiting");
 							Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
-							//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
-							//sleep(2);
-							//draw_menu(Graphics,2,-1,menu2_position,"Rebooting...");
-							//sleep(2);
 							goto end_with_reboot;
 						}
 						Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
@@ -590,10 +720,24 @@ s32 main(s32 argc, char* argv[])
 						sleep(0.05);
 						goto menu_3;
 					}
-					else
+					else if (menu3_position<menu3_size-1) //Delete all backups
 					{
+						draw_menu(Graphics,3,menu3_position,-1,"Deleting...");
+						ret="";
+						ret=recursiveDelete(Graphics, mainfolder+"/backups");
+						if (ret == "")
+						{
+							draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+							Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
+							goto menu_1;
+						}
+						Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
 						draw_menu(Graphics,3,-1,menu3_position,"Waiting");
 						sleep(0.05);
+						goto menu_3;
+					}
+					else //Return to Main Menu
+					{
 						goto menu_1;
 					}
 				}
