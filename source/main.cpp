@@ -3,9 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <io/pad.h>
-//Image, as all the other functions, is already included inside NoRSX header
-#include "NoRSX.h"
-
+#include <NoRSX.h> //Image, as all the other functions, is already included inside NoRSX header
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -20,8 +18,6 @@
 std::string mainfolder;
 std::string fw_version="";
 int fw_version_index=-1;
-//std::string menu1[]={"INSTALL XMB Manager Plus", "INSTALL Rebug Package Manager","RESTORE a backup","Exit to XMB"};
-//std::string menu1_val[]={ "xmbmanpls", "pkgmanage", "restore", "exit" };
 std::string menu1[10];
 int menu1_size=0;
 int menu1_restore=1;
@@ -30,24 +26,6 @@ std::string menu2_fwv[10];
 int menu2_size[10];
 std::string menu3[30];
 int menu3_size=0;
-
-static int exitapp, xmbopen;
-
-static inline void eventHandler(u64 status, u64 param, void * userdata)
-{
-	switch(status)
-	{
-		case SYSUTIL_EXIT_GAME:
-			exitapp = 0;
-			break;
-		case SYSUTIL_MENU_OPEN:
-			xmbopen = 1;
-			break;
-		case SYSUTIL_MENU_CLOSE:
-			xmbopen = 0;
-			break;
-	}
-}
 
 msgType MSG_OK = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
 msgType MSG_ERROR = (msgType)(MSG_DIALOG_ERROR | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
@@ -362,7 +340,6 @@ s32 main(s32 argc, char* argv[])
 	padInfo padinfo;
 	padData paddata;
 
-	sysUtilRegisterCallback(SYSUTIL_EVENT_SLOT0, eventHandler, NULL);
 	std::string firmware_choice;
 	std::string app_choice;
 	std::string dfile;
@@ -554,7 +531,6 @@ s32 main(s32 argc, char* argv[])
 				}
 			}
 		}
-		sysUtilCheckCallback();
 	}
 
 	continue_to_menu2:
@@ -638,7 +614,6 @@ s32 main(s32 argc, char* argv[])
 			}
 		}
 		
-		sysUtilCheckCallback();
 	}
 
 	continue_to_menu3:
@@ -744,25 +719,24 @@ s32 main(s32 argc, char* argv[])
 			}
 		}
 		
-		sysUtilCheckCallback();
 	}
 
 
 	end_with_reboot:
 	{
-		//this will uninitialize the controllers
-		ioPadEnd();
 		//This will uninit the NoRSX lib
 		Graphics->NoRSX_Exit();
+		//this will uninitialize the controllers
+		ioPadEnd();
 		lv2syscall4(379,0x1200,0,0,0); //reboot
 	}
 
 	end:
 	{
-		//this will uninitialize the controllers
-		ioPadEnd();
 		//This will uninit the NoRSX lib
 		Graphics->NoRSX_Exit();
+		//this will uninitialize the controllers
+		ioPadEnd();
 	}
 	return 0;
 }
