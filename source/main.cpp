@@ -29,8 +29,7 @@ int menu3_size=0;
 
 msgType MSG_OK = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
 msgType MSG_ERROR = (msgType)(MSG_DIALOG_ERROR | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
-msgType MSG_YESNO = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DISABLE_CANCEL_ON);
-//msgType MSG_NONE = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_BTN_NONE);
+msgType MSG_YESNO = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DEFAULT_CURSOR_NO);
 
 s32 lv2_get_platform_info(uint8_t platform_info[0x18])
 {
@@ -578,31 +577,36 @@ s32 main(s32 argc, char* argv[])
 				{
 					if (menu2_position<menu2_size[fw_version_index]-1)
 					{
-						firmware_choice=menu2[fw_version_index][menu2_position];
 						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
 						sleep(0.05);
-						draw_menu(Graphics,2,menu2_position,-1,"Making backup...");
-						ret="";
-						ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
-						if (ret == "")
+						Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process takes a while and changes dev_flash files so don't turn off your PS3 while the process in running.").c_str());
+						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							draw_menu(Graphics,2,menu2_position,-1,"Installing...");
-							ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
+							firmware_choice=menu2[fw_version_index][menu2_position];
+							draw_menu(Graphics,2,menu2_position,-1,"Making backup...");
+							ret="";
+							ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
 							if (ret == "")
 							{
-								draw_menu(Graphics,2,menu2_position,-1,"Waiting");
-								Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
-								//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
-								//sleep(2);
-								//draw_menu(Graphics,2,-1,menu2_position,"Rebooting...");
-								//sleep(2);
-								goto end_with_reboot;
+								draw_menu(Graphics,2,menu2_position,-1,"Installing...");
+								ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
+								if (ret == "")
+								{
+									draw_menu(Graphics,2,menu2_position,-1,"Waiting");
+									Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
+									//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
+									//sleep(2);
+									//draw_menu(Graphics,2,-1,menu2_position,"Rebooting...");
+									//sleep(2);
+									goto end_with_reboot;
+								}
 							}
+							Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
+							draw_menu(Graphics,2,-1,menu2_position,"Waiting");
+							sleep(0.05);
+							goto menu_2;
 						}
-						Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
-						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
-						sleep(0.05);
-						goto menu_2;
+						else goto menu_2;
 					}
 					else
 					{
@@ -681,35 +685,45 @@ s32 main(s32 argc, char* argv[])
 					sleep(0.05);
 					if (menu3_position<menu3_size-2) //Restore a backup
 					{
-						draw_menu(Graphics,3,menu3_position,-1,"Restoring...");
-						ret="";
-						ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
-						if (ret == "")
+						Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+menu3[menu3_position]+" backup?\n\nPlease be adviced that this process takes a while and changes dev_flash files so don't turn off your PS3 while the process in running.").c_str());
+						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							draw_menu(Graphics,3,menu3_position,-1,"Waiting");
-							Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
-							goto end_with_reboot;
+							draw_menu(Graphics,3,menu3_position,-1,"Restoring...");
+							ret="";
+							ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
+							if (ret == "")
+							{
+								draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+								Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
+								goto end_with_reboot;
+							}
+							Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
+							draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+							sleep(0.05);
+							goto menu_3;
 						}
-						Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
-						draw_menu(Graphics,3,-1,menu3_position,"Waiting");
-						sleep(0.05);
-						goto menu_3;
+						else goto menu_3;
 					}
 					else if (menu3_position<menu3_size-1) //Delete all backups
 					{
-						draw_menu(Graphics,3,menu3_position,-1,"Deleting...");
-						ret="";
-						ret=recursiveDelete(Graphics, mainfolder+"/backups");
-						if (ret == "")
+						Mess.Dialog(MSG_YESNO,"Are you sure you want to delete all backups?\n\nPlease be adviced that this process takes a while and deletes files in your hdd files so don't turn off your PS3 while the process in running.");
+						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							draw_menu(Graphics,3,menu3_position,-1,"Waiting");
-							Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
-							goto menu_1;
+							draw_menu(Graphics,3,menu3_position,-1,"Deleting...");
+							ret="";
+							ret=recursiveDelete(Graphics, mainfolder+"/backups");
+							if (ret == "")
+							{
+								draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+								Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
+								goto menu_1;
+							}
+							Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
+							draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+							sleep(0.05);
+							goto menu_3;
 						}
-						Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
-						draw_menu(Graphics,3,-1,menu3_position,"Waiting");
-						sleep(0.05);
-						goto menu_3;
+						else goto menu_3;
 					}
 					else //Return to Main Menu
 					{
