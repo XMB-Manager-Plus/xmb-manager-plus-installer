@@ -53,11 +53,6 @@ u32 reboot_sys(){
 	return_to_user_prog(u32);
 }
 
-/*u32 get_console_type(u32 out_buffer[8]){ 
-	lv2syscall1(985, (u32) out_buffer);
-	return_to_user_prog(u32);
-}*/
-
 /*
  * lv2_get_target_type
  *
@@ -309,7 +304,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 
 s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::string status)
 {
-	std::string IMAGE_PATH=mainfolder+"/data/images/xmbm_transparent.png";
+	std::string IMAGE_PATH=mainfolder+"/data/images/logo.png";
 	int posy=0;
 
 	Background B1(Graphics);
@@ -375,9 +370,9 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 			F2.Printf(center_text_x(Graphics, sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
 		}
 	}
-	u32 textX =(Graphics->width/2)-230;
+	u32 textX =(Graphics->width/2)-115;
 	F2.Printf(textX,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
-	F2.Printf(textX+300,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Status: %s", status.c_str());
+	//F2.Printf(textX+300,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Status: %s", status.c_str());
 	
 	Graphics->Flip();
 
@@ -529,7 +524,11 @@ s32 main(s32 argc, char* argv[])
 	menu1_position=0;
 	
 	menu_1:
-	if (opendir ((mainfolder+"/backups").c_str()) == NULL) menu1_restore=0;
+	if (opendir ((mainfolder+"/backups").c_str()) == NULL)
+	{
+		menu1_restore=0;
+		if (menu1_position==menu1_size-2) menu1_position--;
+	}
 	else menu1_restore=1;
 	draw_menu(Graphics,1,menu1_position,-1,"Waiting");
 	while (1)
@@ -547,7 +546,7 @@ s32 main(s32 argc, char* argv[])
 					if (menu1_position<menu1_size-1)
 					{
 						menu1_position++;
-						if (menu1_position==2 && menu1_restore==0) menu1_position++;
+						if (menu1_position==menu1_size-2 && menu1_restore==0) menu1_position++;
 						goto menu_1;
 					}
 					else
@@ -561,7 +560,7 @@ s32 main(s32 argc, char* argv[])
 					if (menu1_position>0)
 					{
 						menu1_position--;
-						if (menu1_position==2 && menu1_restore==0) menu1_position--;
+						if (menu1_position==menu1_size-2 && menu1_restore==0) menu1_position--;
 						goto menu_1;
 					}
 					else
@@ -643,16 +642,16 @@ s32 main(s32 argc, char* argv[])
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
 							firmware_choice=menu2[fw_version_index][menu2_position];
-							draw_menu(Graphics,2,menu2_position,-1,"Making backup...");
+							//draw_menu(Graphics,2,menu2_position,-1,"Making backup...");
 							ret="";
 							ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
 							if (ret == "")
 							{
-								draw_menu(Graphics,2,menu2_position,-1,"Installing...");
+								//draw_menu(Graphics,2,menu2_position,-1,"Installing...");
 								ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
 								if (ret == "")
 								{
-									draw_menu(Graphics,2,menu2_position,-1,"Waiting");
+									//draw_menu(Graphics,2,menu2_position,-1,"Waiting");
 									Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
 									//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
 									//sleep(2);
@@ -748,12 +747,12 @@ s32 main(s32 argc, char* argv[])
 						Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+menu3[menu3_position]+" backup?\n\nPlease be adviced that this process takes a while and changes dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							draw_menu(Graphics,3,menu3_position,-1,"Restoring...");
+							//draw_menu(Graphics,3,menu3_position,-1,"Restoring...");
 							ret="";
 							ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
 							if (ret == "")
 							{
-								draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+								//draw_menu(Graphics,3,menu3_position,-1,"Waiting");
 								Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
 								goto end_with_reboot;
 							}
@@ -769,7 +768,7 @@ s32 main(s32 argc, char* argv[])
 						Mess.Dialog(MSG_YESNO,"Are you sure you want to delete all backups?\n\nPlease be adviced that this process takes a while and deletes files in your hdd files so don't turn off your PS3 while the process in running.");
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							draw_menu(Graphics,3,menu3_position,-1,"Deleting...");
+							//draw_menu(Graphics,3,menu3_position,-1,"Deleting...");
 							ret="";
 							ret=recursiveDelete(Graphics, mainfolder+"/backups");
 							if (ret == "")
