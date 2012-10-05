@@ -43,8 +43,13 @@ s32 sysFsMount(const char* MOUNT_POINT, const char* TYPE_OF_FILESYSTEM, const ch
 }
 
 s32 sysFsUnmount(const char* PATH_TO_UNMOUNT){
-          lv2syscall1(838, (u64)PATH_TO_UNMOUNT);
-          return_to_user_prog(s32);
+	lv2syscall1(838, (u64)PATH_TO_UNMOUNT);
+	return_to_user_prog(s32);
+}
+
+u32 reboot_sys(){ 
+	lv2syscall4(379,0x200,0,0,0);
+	return_to_user_prog(u32);
 }
 
 std::string copy_file(const char* cfrom, const char* ctoo)
@@ -164,6 +169,30 @@ std::string recursiveDelete(NoRSX *Graphics, std::string direct)
 	return "";
 }
 
+s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
+{
+	return (Graphics->width-(strlen(message)*fsize/2))/2;
+}
+
+s32 draw_copy(NoRSX *Graphics, std::string title, std::string from, std::string to)
+{
+	int sizeTitleFont = 30;
+	int sizeFont = 18;
+	Font F1(LATIN2, Graphics);
+	Font F2(LATIN2, Graphics);
+	Background B1(Graphics);
+	B1.Mono(COLOR_BLACK);
+	//Object R1(Graphics);
+	//R1.Rectangle(0, 200, Graphics->width, 200, COLOR_BLACK);
+	F1.Printf(center_text_x(Graphics, sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
+	F2.Printf(center_text_x(Graphics, sizeFont, ("From: "+from).c_str()),260,COLOR_WHITE,sizeFont, "%s",("From: "+from).c_str());
+	F2.Printf(center_text_x(Graphics, sizeFont, ("To: "+to).c_str()),290,COLOR_WHITE,sizeFont, "%s",("To: "+to).c_str());
+	
+	Graphics->Flip();
+
+	return 0;
+}
+
 std::string doit(NoRSX *Graphics, std::string operation, std::string restorefolder, std::string fw, std::string app)
 {
 	const char* DEV_BLIND = "CELL_FS_IOS:BUILTIN_FLSH1";	// dev_flash
@@ -186,6 +215,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	std::string check_path;
 	std::string sourcefile;
 	std::string destfile;
+	std::string title;
 
 	std::string ret="";
 	MsgDialog Messa(Graphics);
@@ -208,6 +238,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			check_paths[j]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j];
 			dest_paths[j]=mainfolder+"/backups/"+foldername+" Before "+app+"/"+flash[j];
 		}
+		title="Backing up files ...";
 	}
 	else if (operation=="restore")
 	{
@@ -216,6 +247,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			source_paths[j]=mainfolder+"/backups/"+restorefolder+"/"+flash[j];
 			dest_paths[j]=flash_paths[j];
 		}
+		title="Restoring files ...";
 	}
 	else if (operation=="install")
 	{
@@ -225,8 +257,11 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			source_paths[j]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j];
 			dest_paths[j]=flash_paths[j];
 		}
+		title="Copying files ...";
 	}
 	
+
+
 	//copy files
 	for(int j=0;j<3;j++)
 	{
@@ -240,6 +275,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			{
 				sourcefile=source_paths[j]+"/"+dirp->d_name;
 				destfile=dest_paths[j]+"/"+dirp->d_name;
+				draw_copy(Graphics, title, sourcefile, destfile);
 				ret=copy_file(sourcefile.c_str(), destfile.c_str());
 				//Messa.Dialog(MSG_OK,("Operation: "+operation+"\n\nopen: "+check_path+"\n\nfrom: "+sourcefile+"\nto: "+destfile+"\n\nreturn: "+ret).c_str());
 				if (ret != "") return ret;
@@ -249,11 +285,6 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	}
 
 	return "";
-}
-
-s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
-{
-	return (Graphics->width-(strlen(message)*fsize/2))/2;
 }
 
 s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::string status)
@@ -742,7 +773,7 @@ s32 main(s32 argc, char* argv[])
 		Graphics->NoRSX_Exit();
 		//this will uninitialize the controllers
 		ioPadEnd();
-		lv2syscall4(379,0x1200,0,0,0); //reboot
+		reboot_sys(); //reboot
 	}
 
 	end:
