@@ -17,6 +17,7 @@
 
 std::string mainfolder;
 std::string fw_version="";
+std::string ttype="";
 int fw_version_index=-1;
 std::string menu1[10];
 int menu1_size=0;
@@ -33,13 +34,13 @@ msgType MSG_YESNO = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MS
 
 s32 lv2_get_platform_info(uint8_t platform_info[0x18])
 {
-   lv2syscall1(387, (uint64_t) platform_info);
-   return_to_user_prog(s32);
+	lv2syscall1(387, (uint64_t) platform_info);
+	return_to_user_prog(s32);
 }
 
 s32 sysFsMount(const char* MOUNT_POINT, const char* TYPE_OF_FILESYSTEM, const char* PATH_TO_MOUNT, int IF_READ_ONLY){
-          lv2syscall8(837, (u64)MOUNT_POINT, (u64)TYPE_OF_FILESYSTEM, (u64)PATH_TO_MOUNT, 0, IF_READ_ONLY, 0, 0, 0);
-          return_to_user_prog(s32);
+	lv2syscall8(837, (u64)MOUNT_POINT, (u64)TYPE_OF_FILESYSTEM, (u64)PATH_TO_MOUNT, 0, IF_READ_ONLY, 0, 0, 0);
+	return_to_user_prog(s32);
 }
 
 s32 sysFsUnmount(const char* PATH_TO_UNMOUNT){
@@ -50,6 +51,25 @@ s32 sysFsUnmount(const char* PATH_TO_UNMOUNT){
 u32 reboot_sys(){ 
 	lv2syscall4(379,0x200,0,0,0);
 	return_to_user_prog(u32);
+}
+
+/*u32 get_console_type(u32 out_buffer[8]){ 
+	lv2syscall1(985, (u32) out_buffer);
+	return_to_user_prog(u32);
+}*/
+
+/*
+ * lv2_get_target_type
+ *
+ * Types:
+ * 	1 - Retail
+ * 	2 - Debug
+ * 	3 - Reference Tool
+ */
+s32 lv2_get_target_type(uint64_t *type)
+{
+	lv2syscall1(985, (uint64_t) type);
+	return_to_user_prog(s32);
 }
 
 std::string copy_file(const char* cfrom, const char* ctoo)
@@ -356,7 +376,7 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 		}
 	}
 	u32 textX =(Graphics->width/2)-230;
-	F2.Printf(textX,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Firmware version: %s", fw_version.c_str());
+	F2.Printf(textX,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
 	F2.Printf(textX+300,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Status: %s", status.c_str());
 	
 	Graphics->Flip();
@@ -393,6 +413,8 @@ s32 main(s32 argc, char* argv[])
 	uint8_t platform_info[0x18];
 	lv2_get_platform_info(platform_info);
 	uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
+	uint64_t targettype;
+	lv2_get_target_type(&targettype);
 
 	//this will initialize the controller (7= seven controllers)
 	ioPadInit (7);
@@ -400,7 +422,7 @@ s32 main(s32 argc, char* argv[])
 	NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
 	//NoRSX *Graphics = new NoRSX();
 	MsgDialog Mess(Graphics);
-	
+
 	//Get main folder
 	pch = strtok (argv[0],"/");
 	while (pch != NULL)
@@ -439,7 +461,14 @@ s32 main(s32 argc, char* argv[])
 	closedir(dp);
 
 	//check if current version is supported
-	if (fw==0x30560) fw_version="3.56";
+	if (targettype==1) ttype="CEX";
+	else if (targettype==2) ttype="DEX";
+	else if (targettype==3) ttype="DECR";
+	if (fw==0x40250) fw_version="4.25";
+	else if (fw==0x40210) fw_version="4.21";
+	else if (fw==0x40200) fw_version="4.20";
+	else if (fw==0x40110) fw_version="4.11";
+	else if (fw==0x30560) fw_version="3.56";
 	else if (fw==0x30550) fw_version="3.55";
 	else if (fw==0x30410) fw_version="3.41";
 	else if (fw==0x30150) fw_version="3.15";
