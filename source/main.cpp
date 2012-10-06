@@ -302,7 +302,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	return "";
 }
 
-s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::string status)
+s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed)
 {
 	std::string IMAGE_PATH=mainfolder+"/data/images/logo.png";
 	int posy=0;
@@ -372,7 +372,7 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, std::strin
 	}
 	u32 textX =(Graphics->width/2)-115;
 	F2.Printf(textX,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
-	//F2.Printf(textX+300,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Status: %s", status.c_str());
+	F2.Printf(center_text_x(Graphics, sizeFont-5, "Created by XMBM+ Team - feel free to use in your project"),Graphics->height-(sizeFont-5+10),0xd38900,sizeFont-5,     "Created by XMBM+ Team");
 	
 	Graphics->Flip();
 
@@ -530,7 +530,7 @@ s32 main(s32 argc, char* argv[])
 		if (menu1_position==menu1_size-2) menu1_position--;
 	}
 	else menu1_restore=1;
-	draw_menu(Graphics,1,menu1_position,-1,"Waiting");
+	draw_menu(Graphics,1,menu1_position,-1);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -571,12 +571,36 @@ s32 main(s32 argc, char* argv[])
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,1,-1,menu1_position,"Waiting");
+					draw_menu(Graphics,1,-1,menu1_position);
 					sleep(0.05);
 					if (menu1_position<menu1_size-2)
 					{
 						app_choice=menu1[menu1_position];
-						goto continue_to_menu2;
+						if (menu2[fw_version_index][0]=="All Firmwares" && menu2_size[fw_version_index]==2)
+						{
+							Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
+							if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
+							{
+								firmware_choice=menu2[fw_version_index][0];
+								ret="";
+								ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
+								if (ret == "")
+								{
+									ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
+									if (ret == "")
+									{
+										Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
+										goto end_with_reboot;
+									}
+								}
+								Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
+								draw_menu(Graphics,1,-1,menu1_position);
+								sleep(0.05);
+								goto menu_1;
+							}
+							else goto menu_1;
+						}
+						else goto continue_to_menu2;
 					}
 					else if (menu1_position<menu1_size-1)
 					{
@@ -594,7 +618,7 @@ s32 main(s32 argc, char* argv[])
 	continue_to_menu2:
 	menu2_position=0;
 	menu_2:
-	draw_menu(Graphics,2,menu2_position,-1,"Waiting");
+	draw_menu(Graphics,2,menu2_position,-1);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -636,32 +660,25 @@ s32 main(s32 argc, char* argv[])
 				{
 					if (menu2_position<menu2_size[fw_version_index]-1)
 					{
-						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
+						draw_menu(Graphics,2,-1,menu2_position);
 						sleep(0.05);
-						Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process takes a while and changes dev_flash files so don't turn off your PS3 while the process in running.").c_str());
+						Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
 							firmware_choice=menu2[fw_version_index][menu2_position];
-							//draw_menu(Graphics,2,menu2_position,-1,"Making backup...");
 							ret="";
 							ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
 							if (ret == "")
 							{
-								//draw_menu(Graphics,2,menu2_position,-1,"Installing...");
 								ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
 								if (ret == "")
 								{
-									//draw_menu(Graphics,2,menu2_position,-1,"Waiting");
 									Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
-									//draw_menu(Graphics,2,-1,menu2_position,"Installed!");
-									//sleep(2);
-									//draw_menu(Graphics,2,-1,menu2_position,"Rebooting...");
-									//sleep(2);
 									goto end_with_reboot;
 								}
 							}
 							Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,2,-1,menu2_position,"Waiting");
+							draw_menu(Graphics,2,-1,menu2_position);
 							sleep(0.05);
 							goto menu_2;
 						}
@@ -669,7 +686,7 @@ s32 main(s32 argc, char* argv[])
 					}
 					else
 					{
-						draw_menu(Graphics,2,-1,menu2_position,"Waiting");
+						draw_menu(Graphics,2,-1,menu2_position);
 						sleep(0.05);
 						goto menu_1;
 					}
@@ -700,7 +717,7 @@ s32 main(s32 argc, char* argv[])
 	menu3_size++;
 	menu3_position=0;
 	menu_3:
-	draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+	draw_menu(Graphics,3,menu3_position,-1);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -740,24 +757,22 @@ s32 main(s32 argc, char* argv[])
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+					draw_menu(Graphics,3,-1,menu3_position);
 					sleep(0.05);
 					if (menu3_position<menu3_size-2) //Restore a backup
 					{
-						Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+menu3[menu3_position]+" backup?\n\nPlease be adviced that this process takes a while and changes dev_flash files so don't turn off your PS3 while the process in running.").c_str());
+						Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+menu3[menu3_position]+" backup?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							//draw_menu(Graphics,3,menu3_position,-1,"Restoring...");
 							ret="";
 							ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
 							if (ret == "")
 							{
-								//draw_menu(Graphics,3,menu3_position,-1,"Waiting");
 								Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
 								goto end_with_reboot;
 							}
 							Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+							draw_menu(Graphics,3,-1,menu3_position);
 							sleep(0.05);
 							goto menu_3;
 						}
@@ -765,20 +780,19 @@ s32 main(s32 argc, char* argv[])
 					}
 					else if (menu3_position<menu3_size-1) //Delete all backups
 					{
-						Mess.Dialog(MSG_YESNO,"Are you sure you want to delete all backups?\n\nPlease be adviced that this process takes a while and deletes files in your hdd files so don't turn off your PS3 while the process in running.");
+						Mess.Dialog(MSG_YESNO,"Are you sure you want to delete all backups?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.");
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							//draw_menu(Graphics,3,menu3_position,-1,"Deleting...");
 							ret="";
 							ret=recursiveDelete(Graphics, mainfolder+"/backups");
 							if (ret == "")
 							{
-								draw_menu(Graphics,3,menu3_position,-1,"Waiting");
+								draw_menu(Graphics,3,menu3_position,-1);
 								Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
 								goto menu_1;
 							}
 							Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,3,-1,menu3_position,"Waiting");
+							draw_menu(Graphics,3,-1,menu3_position);
 							sleep(0.05);
 							goto menu_3;
 						}
