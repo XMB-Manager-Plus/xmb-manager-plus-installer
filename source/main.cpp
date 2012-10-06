@@ -370,9 +370,8 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed)
 			F2.Printf(center_text_x(Graphics, sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
 		}
 	}
-	u32 textX =(Graphics->width/2)-115;
-	F2.Printf(textX,posy+2*(sizeFont+4),0xc0c0c0,sizeFont,     "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
-	F2.Printf(center_text_x(Graphics, sizeFont-5, "Created by XMBM+ Team - feel free to use in your project"),Graphics->height-(sizeFont-5+10),0xd38900,sizeFont-5,     "Created by XMBM+ Team");
+	F2.Printf(center_text_x(Graphics, sizeFont, "Firmware: X.XX (CEX)"),Graphics->height-(sizeFont+20+(sizeFont-5)+10),0xc0c0c0,sizeFont, "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
+	F2.Printf(center_text_x(Graphics, sizeFont-5, "Installer created by XMBM+ Team"),Graphics->height-((sizeFont-5)+10),0xd38900,sizeFont-5,     "Installer created by XMBM+ Team");
 	
 	Graphics->Flip();
 
