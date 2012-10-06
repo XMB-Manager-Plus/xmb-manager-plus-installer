@@ -74,7 +74,7 @@ std::string copy_file(const char* cfrom, const char* ctoo)
   char ch;
 
   /* open source file */
-  if((from = fopen(cfrom, "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
+  if ((from = fopen(cfrom, "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
 
   /* open destination file */
   if((to = fopen(ctoo, "wb"))==NULL) return "Cannot open destination file ("+(std::string)ctoo+") for writing!";
@@ -217,13 +217,13 @@ bool replace(std::string& str, const std::string& from, const std::string& to) {
     return true;
 }
 
-std::string correct_path(std::string dpath)
+std::string correct_path(std::string dpath, int what)
 {
 	std::string cpath;
 
 	cpath=dpath;
-	replace(cpath.begin(), cpath.end(), '~', '/');
-	if (cpath.find("dev_flash")!=std::string::npos) cpath.replace( cpath.find("dev_flash"), 9, "dev_blind");
+	if (what==1 || what==2) replace(cpath.begin(), cpath.end(), '~', '/');
+	if (what==2) if (cpath.find("dev_flash")!=std::string::npos) cpath.replace( cpath.find("dev_flash"), 9, "dev_blind");
 
 	return "/"+cpath;
 }
@@ -262,6 +262,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	std::string title;
 	int findex=0;
 	int mountblind=0;
+	int dirnotfound=0;
 	std::string ret="";
 
 	MsgDialog Messa(Graphics);
@@ -279,10 +280,11 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
 			{
 				create_dir(mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name);
-				source_paths[findex]=correct_path(dirp->d_name);
 				check_paths[findex]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+dirp->d_name;
-				dest_paths[findex]=mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name;
+				if (exists(correct_path(dirp->d_name,1).c_str())==0) dirnotfound=1;
+				source_paths[findex]=correct_path(dirp->d_name,2);
 				if (source_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
+				dest_paths[findex]=mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name;
 				findex++;
 			}
 		}
@@ -299,7 +301,8 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
 			{
 				source_paths[findex]=check_path + "/" + dirp->d_name;
-				dest_paths[findex]=correct_path(dirp->d_name);
+				if (exists(correct_path(dirp->d_name,1).c_str())==0) dirnotfound=1;
+				dest_paths[findex]=correct_path(dirp->d_name,2);
 				if (dest_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
 				findex++;
 			}
@@ -317,8 +320,10 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
 			{
 				source_paths[findex]=check_path + "/" + dirp->d_name;
-				dest_paths[findex]=correct_path(dirp->d_name);
+				if (exists(correct_path(dirp->d_name,1).c_str())==0) dirnotfound=1;
+				dest_paths[findex]=correct_path(dirp->d_name,2);
 				if (dest_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
+				if (exists(dest_paths[findex].c_str())==0) dirnotfound=1;
 				findex++;
 			}
 		}
@@ -326,6 +331,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 		title="Copying files ...";
 	}
 
+	if (dirnotfound==1) return "Couldn't find destination directory";
 	if (mountblind==1)
 	{
 		if (is_dev_blind_mounted()!=0) mount_dev_blind();
@@ -346,9 +352,12 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			{
 				sourcefile=source_paths[j]+"/"+dirp->d_name;
 				destfile=dest_paths[j]+"/"+dirp->d_name;
-				draw_copy(Graphics, title, sourcefile, destfile);
-				ret=copy_file(sourcefile.c_str(), destfile.c_str());
-				if (ret != "") return ret;
+				if (!(operation=="backup" && exists(sourcefile.c_str())==0))
+				{
+					draw_copy(Graphics, title, sourcefile, destfile);
+					ret=copy_file(sourcefile.c_str(), destfile.c_str());
+					if (ret != "") return ret;
+				}
 			}
 		}
 		closedir(dp);
