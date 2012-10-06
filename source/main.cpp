@@ -10,6 +10,7 @@
 #include <sys/file.h>
 #include <sys/types.h>
 #include <string>
+#include <algorithm>
 #include <time.h>
 #include <errno.h>
 
@@ -208,77 +209,132 @@ s32 draw_copy(NoRSX *Graphics, std::string title, std::string from, std::string 
 	return 0;
 }
 
-std::string doit(NoRSX *Graphics, std::string operation, std::string restorefolder, std::string fw, std::string app)
+bool replace(std::string& str, const std::string& from, const std::string& to) {
+    size_t start_pos = str.find(from);
+    if(start_pos == std::string::npos)
+        return false;
+    str.replace(start_pos, from.length(), to);
+    return true;
+}
+
+std::string correct_path(std::string dpath)
+{
+	std::string cpath;
+
+	cpath=dpath;
+	replace(cpath.begin(), cpath.end(), '~', '/');
+	if (cpath.find("dev_flash")!=std::string::npos) cpath.replace( cpath.find("dev_flash"), 9, "dev_blind");
+
+	return "/"+cpath;
+}
+
+int is_dev_blind_mounted()
+{
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+	sysFSStat dir;
+
+	return sysFsStat(MOUNT_POINT, &dir);
+}
+
+int mount_dev_blind()
 {
 	const char* DEV_BLIND = "CELL_FS_IOS:BUILTIN_FLSH1";	// dev_flash
 	const char* FAT = "CELL_FS_FAT"; //it's also for fat32
 	const char* MOUNT_POINT = "/dev_blind"; //our mount point
 
-	//we may need to check if it is already mounted:
-	sysFSStat dir;
+	sysFsMount(DEV_BLIND, FAT, MOUNT_POINT, 0);
 
+	return 0;
+}
+
+std::string doit(NoRSX *Graphics, std::string operation, std::string restorefolder, std::string fw, std::string app)
+{
 	std::string foldername;
 
 	DIR *dp;
 	struct dirent *dirp;
-
-	std::string flash[]={"rco","xml","sprx"};
-	std::string flash_paths[]={(std::string)MOUNT_POINT+"/vsh/resource", (std::string)MOUNT_POINT+"/vsh/resource/explore/xmb", (std::string)MOUNT_POINT+"/vsh/module"};
-	std::string source_paths[3];
-	std::string dest_paths[3];
-	std::string check_paths[3];
+	std::string source_paths[100];
+	std::string dest_paths[100];
+	std::string check_paths[100];
 	std::string check_path;
 	std::string sourcefile;
 	std::string destfile;
 	std::string title;
-
+	int findex=0;
+	int mountblind=0;
 	std::string ret="";
+
 	MsgDialog Messa(Graphics);
 
-	int is_mounted = sysFsStat(MOUNT_POINT, &dir);
-	if (is_mounted != 0) sysFsMount(DEV_BLIND, FAT, MOUNT_POINT, 0);
-	is_mounted = sysFsStat(MOUNT_POINT, &dir);
-	if (is_mounted != 0) return "Dev_blind not mounted!";
 	if (operation=="backup")
 	{
-		create_file((flash_paths[1]+"/xmbmp.cfg").c_str());
 		foldername=currentDateTime();
 		create_dir(mainfolder+"/backups");
 		create_dir(mainfolder+"/backups/" + foldername+" Before "+app);
-		for(int j=0;j<3;j++)
+		check_path=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app;
+		dp = opendir (check_path.c_str());
+		if (dp == NULL) return "Cannot open directory "+check_path;
+		while ( (dirp = readdir(dp) ) )
 		{
-			create_dir(mainfolder+"/backups/" + foldername+" Before "+app+"/"+flash[j]);
-			create_dir(mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j]);
-			source_paths[j]=flash_paths[j];
-			check_paths[j]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j];
-			dest_paths[j]=mainfolder+"/backups/"+foldername+" Before "+app+"/"+flash[j];
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				create_dir(mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name);
+				source_paths[findex]=correct_path(dirp->d_name);
+				check_paths[findex]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+dirp->d_name;
+				dest_paths[findex]=mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name;
+				if (source_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
+				findex++;
+			}
 		}
+		closedir(dp);
 		title="Backing up files ...";
 	}
 	else if (operation=="restore")
 	{
-		for(int j=0;j<3;j++)
+		check_path=mainfolder+"/backups/"+restorefolder;
+		dp = opendir (check_path.c_str());
+		if (dp == NULL) return "Cannot open directory "+check_path;
+		while ( (dirp = readdir(dp) ) )
 		{
-			source_paths[j]=mainfolder+"/backups/"+restorefolder+"/"+flash[j];
-			dest_paths[j]=flash_paths[j];
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				source_paths[findex]=check_path + "/" + dirp->d_name;
+				dest_paths[findex]=correct_path(dirp->d_name);
+				if (dest_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
+				findex++;
+			}
 		}
+		closedir(dp);
 		title="Restoring files ...";
 	}
 	else if (operation=="install")
 	{
-		for(int j=0;j<3;j++)
+		check_path=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app;
+		dp = opendir (check_path.c_str());
+		if (dp == NULL) return "Cannot open directory "+check_path;
+		while ( (dirp = readdir(dp) ) )
 		{
-			create_dir(mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j]);
-			source_paths[j]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+flash[j];
-			dest_paths[j]=flash_paths[j];
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				source_paths[findex]=check_path + "/" + dirp->d_name;
+				dest_paths[findex]=correct_path(dirp->d_name);
+				if (dest_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
+				findex++;
+			}
 		}
+		closedir(dp);
 		title="Copying files ...";
 	}
-	
 
+	if (mountblind==1)
+	{
+		if (is_dev_blind_mounted()!=0) mount_dev_blind();
+		if (is_dev_blind_mounted()!=0) return "Dev_blind not mounted!";
+		create_file("/dev_blind/vsh/resource/explore/xmb/xmbmp.cfg");
+	}
 
 	//copy files
-	for(int j=0;j<3;j++)
+	for(int j=0;j<findex;j++)
 	{
 		if (operation=="backup") check_path=check_paths[j];
 		else check_path=source_paths[j];
@@ -291,8 +347,8 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 				sourcefile=source_paths[j]+"/"+dirp->d_name;
 				destfile=dest_paths[j]+"/"+dirp->d_name;
 				draw_copy(Graphics, title, sourcefile, destfile);
+				sleep(3);
 				ret=copy_file(sourcefile.c_str(), destfile.c_str());
-				//Messa.Dialog(MSG_OK,("Operation: "+operation+"\n\nopen: "+check_path+"\n\nfrom: "+sourcefile+"\nto: "+destfile+"\n\nreturn: "+ret).c_str());
 				if (ret != "") return ret;
 			}
 		}
@@ -588,11 +644,15 @@ s32 main(s32 argc, char* argv[])
 									ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
 									if (ret == "")
 									{
-										Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
-										goto end_with_reboot;
+										if (is_dev_blind_mounted()==0)
+										{
+											Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
+											goto end_with_reboot;
+										}
+										else Mess.Dialog(MSG_OK,"Installed!\nPress OK to continue.");
 									}
 								}
-								Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
+								else Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
 								draw_menu(Graphics,1,-1,menu1_position);
 								sleep(0.05);
 								goto menu_1;
@@ -672,11 +732,15 @@ s32 main(s32 argc, char* argv[])
 								ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
 								if (ret == "")
 								{
-									Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
-									goto end_with_reboot;
+									if (is_dev_blind_mounted()==0)
+									{
+										Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
+										goto end_with_reboot;
+									}
+									else Mess.Dialog(MSG_OK,"Installed!\nPress OK to continue.");
 								}
 							}
-							Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
+							else Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
 							draw_menu(Graphics,2,-1,menu2_position);
 							sleep(0.05);
 							goto menu_2;
@@ -767,10 +831,14 @@ s32 main(s32 argc, char* argv[])
 							ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
 							if (ret == "")
 							{
-								Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
-								goto end_with_reboot;
+								if (is_dev_blind_mounted()==0)
+								{
+									Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
+									goto end_with_reboot;
+								}
+								else Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to continue.");
 							}
-							Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
+							else Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
 							draw_menu(Graphics,3,-1,menu3_position);
 							sleep(0.05);
 							goto menu_3;
