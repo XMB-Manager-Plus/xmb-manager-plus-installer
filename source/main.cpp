@@ -347,7 +347,6 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 				sourcefile=source_paths[j]+"/"+dirp->d_name;
 				destfile=dest_paths[j]+"/"+dirp->d_name;
 				draw_copy(Graphics, title, sourcefile, destfile);
-				sleep(3);
 				ret=copy_file(sourcefile.c_str(), destfile.c_str());
 				if (ret != "") return ret;
 			}
