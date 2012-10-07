@@ -255,6 +255,14 @@ int mount_dev_blind()
 	return 0;
 }
 
+int unmount_dev_blind()
+{
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+
+	sysFsMount(MOUNT_POINT);
+
+	return 0;
+}
 std::string doit(NoRSX *Graphics, std::string operation, std::string restorefolder, std::string fw, std::string app)
 {
 	std::string foldername;
@@ -365,7 +373,25 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 					draw_copy(Graphics, title, sourcefile, destfile);
 					//sleep(10);
 					ret=copy_file(sourcefile.c_str(), destfile.c_str());
-					if (ret != "") return ret;
+					if (ret != "")
+					{
+						//Implemet rollback in caso of error while copying
+						/*if (operation=="backup") //delete backup
+						{
+							Mess.Dialog(MSG_ERROR,"An error occured during backup. Backup files will be deleted.");
+							ret=recursiveDelete(Graphics, mainfolder+"/backups/" + foldername+" Before "+app);
+							return ret;
+						}
+						if (operation=="install") //rollback
+						{
+							Mess.Dialog(MSG_ERROR,"An error occured during install. Operation will rollback.");
+							ret=doit(Graphics,"restore", foldername+" Before "+app, "", "");
+							return ret;
+						}*/
+
+						return ret;
+					}
+					//Implement file compare
 				}
 			}
 		}
@@ -903,6 +929,7 @@ s32 main(s32 argc, char* argv[])
 		Graphics->NoRSX_Exit();
 		//this will uninitialize the controllers
 		ioPadEnd();
+		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 		reboot_sys(); //reboot
 	}
 
@@ -912,6 +939,7 @@ s32 main(s32 argc, char* argv[])
 		Graphics->NoRSX_Exit();
 		//this will uninitialize the controllers
 		ioPadEnd();
+		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 	}
 	return 0;
 }
