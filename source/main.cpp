@@ -19,12 +19,10 @@
 std::string mainfolder;
 std::string fw_version="";
 std::string ttype="";
-int fw_version_index=-1;
 std::string menu1[10];
 int menu1_size=0;
 int menu1_restore=1;
 std::string menu2[10][10];
-std::string menu2_fwv[10];
 int menu2_size[10];
 std::string menu3[30];
 int menu3_size=0;
@@ -66,6 +64,16 @@ s32 lv2_get_target_type(uint64_t *type)
 {
 	lv2syscall1(985, (uint64_t) type);
 	return_to_user_prog(s32);
+}
+
+void debug_print(NoRSX *Graphics, std::string text)
+{
+	Background B1(Graphics);
+	B1.Mono(COLOR_BLACK);
+	Font F1(LATIN2, Graphics);
+	F1.Printf(100, 100,0xffffff,20, "%s", text.c_str());
+	Graphics->Flip();
+	sleep(10);
 }
 
 std::string copy_file(const char* cfrom, const char* ctoo)
@@ -272,7 +280,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 		foldername=currentDateTime();
 		create_dir(mainfolder+"/backups");
 		create_dir(mainfolder+"/backups/" + foldername+" Before "+app);
-		check_path=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app;
+		check_path=mainfolder+"/apps/"+app+"/"+fw_version+"/"+fw;
 		dp = opendir (check_path.c_str());
 		if (dp == NULL) return "Cannot open directory "+check_path;
 		while ( (dirp = readdir(dp) ) )
@@ -280,7 +288,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
 			{
 				create_dir(mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name);
-				check_paths[findex]=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app+"/"+dirp->d_name;
+				check_paths[findex]=mainfolder+"/apps/"+app+"/"+fw_version+"/"+fw+"/"+dirp->d_name;
 				if (exists(correct_path(dirp->d_name,1).c_str())==0) dirnotfound=1;
 				source_paths[findex]=correct_path(dirp->d_name,2);
 				if (source_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
@@ -312,7 +320,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	}
 	else if (operation=="install")
 	{
-		check_path=mainfolder+"/resources/"+fw_version+"/"+fw+"/"+app;
+		check_path=mainfolder+"/apps/"+app+"/"+fw_version+"/"+fw;
 		dp = opendir (check_path.c_str());
 		if (dp == NULL) return "Cannot open directory "+check_path;
 		while ( (dirp = readdir(dp) ) )
@@ -355,6 +363,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 				if (!(operation=="backup" && exists(sourcefile.c_str())==0))
 				{
 					draw_copy(Graphics, title, sourcefile, destfile);
+					//sleep(10);
 					ret=copy_file(sourcefile.c_str(), destfile.c_str());
 					if (ret != "") return ret;
 				}
@@ -366,7 +375,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	return "";
 }
 
-s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed)
+s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, int menu1_position)
 {
 	std::string IMAGE_PATH=mainfolder+"/data/images/logo.png";
 	int posy=0;
@@ -392,10 +401,9 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed)
 	posy=260;
 	if (menu_id==1)
 	{
-		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE WHAT TO INSTALL"),220, 0xd38900, sizeTitleFont, "CHOOSE WHAT TO INSTALL");
+		F1.Printf(center_text_x(Graphics, sizeTitleFont, "INSTALLER MENU"),220, 0xd38900, sizeTitleFont, "INSTALLER MENU");
 		for(int j=0;j<menu1_size;j++)
 		{
-			
 			if (j<menu1_size-1) posy=posy+sizeFont+4;
 			else posy=posy+(2*(sizeFont+4));
 			if (j==choosed) menu_color=COLOR_RED;
@@ -411,14 +419,14 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed)
 	else if (menu_id==2)
 	{
 		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
-		for(int j=0;j<menu2_size[fw_version_index];j++)
+		for(int j=0;j<menu2_size[menu1_position];j++)
 		{
-			if (j<menu2_size[fw_version_index]-1) posy=posy+sizeFont+4;
+			if (j<menu2_size[menu1_position]-1) posy=posy+sizeFont+4;
 			else posy=posy+(2*(sizeFont+4));
 			if (j==choosed) menu_color=COLOR_RED;
 			else if (j==selected) menu_color=COLOR_YELLOW;
 			else menu_color=COLOR_WHITE;
-			F2.Printf(center_text_x(Graphics, sizeFont, menu2[fw_version_index][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[fw_version_index][j].c_str());
+			F2.Printf(center_text_x(Graphics, sizeFont, menu2[menu1_position][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[menu1_position][j].c_str());
 		}
 	}
 	else if (menu_id==3)
@@ -442,6 +450,7 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed)
 	return 0;
 }
 
+
 s32 main(s32 argc, char* argv[])
 {
 	//this is the structure for the pad controllers
@@ -450,10 +459,15 @@ s32 main(s32 argc, char* argv[])
 
 	std::string firmware_choice;
 	std::string app_choice;
-	std::string dfile;
 	std::string direct;
+	std::string direct2;
+	std::string direct3;
 	DIR *dp;
+	DIR *dp2;
+	DIR *dp3;
 	struct dirent *dirp;
+	struct dirent *dirp2;
+	struct dirent *dirp3;
 
 	int mcount=0;
 	char * pch;
@@ -503,21 +517,6 @@ s32 main(s32 argc, char* argv[])
 		else Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
 	}
 
-	//fetch available firmwares versions
-	direct=mainfolder+"/resources";
-	dp = opendir (direct.c_str());
-	if (dp == NULL) return 0;
-	while ( (dirp = readdir(dp) ) )
-	{
-		dfile = direct + "/" + dirp->d_name;
-		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
-		{
-			menu2_fwv[ifwv]=dirp->d_name;
-			ifwv++;
-		}
-	}
-	closedir(dp);
-
 	//check if current version is supported
 	if (targettype==1) ttype="CEX";
 	else if (targettype==2) ttype="DEX";
@@ -530,60 +529,75 @@ s32 main(s32 argc, char* argv[])
 	else if (fw==0x30550) fw_version="3.55";
 	else if (fw==0x30410) fw_version="3.41";
 	else if (fw==0x30150) fw_version="3.15";
-	for (int h=0; h<ifwv; h++)
+
+	//make menus arrays
+	iapp=0;
+	direct=mainfolder+"/apps";
+	dp = opendir (direct.c_str());
+	if (dp == NULL) return 0;
+	while ( (dirp = readdir(dp) ) )
 	{
-		if (fw_version==menu2_fwv[h]) fw_version_index=h;
+		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+		{
+			//second menu
+			ifwv=0;
+			direct2=direct+"/"+dirp->d_name;
+			dp2 = opendir (direct2.c_str());
+			if (dp2 == NULL) return 0;
+			while ( (dirp2 = readdir(dp2) ) )
+			{
+				if ( strcmp(dirp2->d_name, ".") != 0 && strcmp(dirp2->d_name, "..") != 0 && strcmp(dirp2->d_name, "") != 0)
+				{
+					if (strcmp(dirp2->d_name, fw_version.c_str())==0 || strcmp(dirp2->d_name, "All")==0)
+					{
+						//debug_print(Graphics, (std::string)dirp->d_name+" "+(std::string)dirp2->d_name+" "+fw_version);
+						ifw=0;
+						direct3=direct2+"/"+dirp2->d_name;
+						dp3 = opendir (direct3.c_str());
+						if (dp3 == NULL) return 0;
+						while ( (dirp3 = readdir(dp3) ) )
+						{
+							if ( strcmp(dirp3->d_name, ".") != 0 && strcmp(dirp3->d_name, "..") != 0 && strcmp(dirp3->d_name, "") != 0)
+							{
+								menu2[iapp][ifw]=dirp3->d_name;
+								ifw++;
+							}
+						}
+						closedir(dp3);
+						if (ifw!=0) //has apps for the current firmware
+						{
+							menu2[iapp][ifw]="Back to main menu";
+							ifw++;
+							menu2_size[iapp]= ifw;
+						}
+						ifwv++;
+					}
+				}
+			}
+			closedir(dp2);
+			if (ifwv!=0) //has apps for the current firmware version
+			{
+				menu1[iapp]=dirp->d_name;
+				iapp++;
+			}
+		}
 	}
-	if (fw_version=="" || fw_version_index==-1)
+	closedir(dp);
+	if (iapp!=0)
+	{
+		menu1[iapp]="RESTORE a backup";
+		iapp++;
+		menu1[iapp]="Exit to XMB";
+		iapp++;
+		menu1_size=iapp;
+	}
+	else
 	{
 		Mess.Dialog(MSG_ERROR,"Your firmware version is not supported.");
 		goto end;
 	}
 
-	//fetch available firmwares per version
-	for (int h=0; h<ifwv; h++)
-	{
-		ifw=0;
-		direct=mainfolder+"/resources/"+menu2_fwv[h];
-		dp = opendir (direct.c_str());
-		if (dp == NULL) return 0;
-		while ( (dirp = readdir(dp) ) )
-		{
-			dfile = direct + "/" + dirp->d_name;
-			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
-			{
-				menu2[h][ifw]=dirp->d_name;
-				ifw++;
-			}
-		}
-		closedir(dp);
-		menu2[h][ifw]="Back to main menu";
-		ifw++;
-		menu2_size[h]= ifw;
-	}
-
-	//fetch available apps
-	iapp=0;
-	direct=mainfolder+"/resources/"+menu2_fwv[0]+"/"+menu2[0][0];
-	dp = opendir (direct.c_str());
-	if (dp == NULL) return 0;
-	while ( (dirp = readdir(dp) ) )
-	{
-		dfile = direct + "/" + dirp->d_name;
-		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
-		{
-			menu1[iapp]=dirp->d_name;
-			iapp++;
-		}
-	}
-	closedir(dp);
-	menu1[iapp]="RESTORE a backup";
-	iapp++;
-	menu1[iapp]="Exit to XMB";
-	iapp++;
-	menu1_size= iapp;
-
-	//Start second menu
+	//Start menu
 	menu1_position=0;
 	
 	menu_1:
@@ -593,7 +607,7 @@ s32 main(s32 argc, char* argv[])
 		if (menu1_position==menu1_size-2) menu1_position--;
 	}
 	else menu1_restore=1;
-	draw_menu(Graphics,1,menu1_position,-1);
+	draw_menu(Graphics,1,menu1_position,-1,0);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -634,17 +648,17 @@ s32 main(s32 argc, char* argv[])
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,1,-1,menu1_position);
+					draw_menu(Graphics,1,-1,menu1_position,0);
 					sleep(0.05);
 					if (menu1_position<menu1_size-2)
 					{
 						app_choice=menu1[menu1_position];
-						if (menu2[fw_version_index][0]=="All Firmwares" && menu2_size[fw_version_index]==2)
+						if (menu2[menu1_position][0]=="All Firmwares" && menu2_size[menu1_position]==2)
 						{
 							Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 							if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 							{
-								firmware_choice=menu2[fw_version_index][0];
+								firmware_choice=menu2[menu1_position][0];
 								ret="";
 								ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
 								if (ret == "")
@@ -661,7 +675,7 @@ s32 main(s32 argc, char* argv[])
 									}
 								}
 								else Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
-								draw_menu(Graphics,1,-1,menu1_position);
+								draw_menu(Graphics,1,-1,menu1_position,0);
 								sleep(0.05);
 								goto menu_1;
 							}
@@ -685,7 +699,7 @@ s32 main(s32 argc, char* argv[])
 	continue_to_menu2:
 	menu2_position=0;
 	menu_2:
-	draw_menu(Graphics,2,menu2_position,-1);
+	draw_menu(Graphics,2,menu2_position,-1,menu1_position);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -699,7 +713,7 @@ s32 main(s32 argc, char* argv[])
 				if (paddata.BTN_CIRCLE) goto menu_1;
 				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 				{
-					if (menu2_position<menu2_size[fw_version_index]-1)
+					if (menu2_position<menu2_size[menu1_position]-1)
 					{
 						menu2_position++;
 						goto menu_2;
@@ -719,20 +733,20 @@ s32 main(s32 argc, char* argv[])
 					}
 					else
 					{
-						menu2_position=menu2_size[fw_version_index]-1;
+						menu2_position=menu2_size[menu1_position]-1;
 						goto menu_2;
 					}
 				}
 				if (paddata.BTN_CROSS)
 				{
-					if (menu2_position<menu2_size[fw_version_index]-1)
+					if (menu2_position<menu2_size[menu1_position]-1)
 					{
-						draw_menu(Graphics,2,-1,menu2_position);
+						draw_menu(Graphics,2,-1,menu2_position,menu1_position);
 						sleep(0.05);
 						Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							firmware_choice=menu2[fw_version_index][menu2_position];
+							firmware_choice=menu2[menu1_position][menu2_position];
 							ret="";
 							ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
 							if (ret == "")
@@ -749,7 +763,7 @@ s32 main(s32 argc, char* argv[])
 								}
 							}
 							else Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,2,-1,menu2_position);
+							draw_menu(Graphics,2,-1,menu2_position,menu1_position);
 							sleep(0.05);
 							goto menu_2;
 						}
@@ -757,7 +771,7 @@ s32 main(s32 argc, char* argv[])
 					}
 					else
 					{
-						draw_menu(Graphics,2,-1,menu2_position);
+						draw_menu(Graphics,2,-1,menu2_position,menu1_position);
 						sleep(0.05);
 						goto menu_1;
 					}
@@ -774,7 +788,6 @@ s32 main(s32 argc, char* argv[])
 	if (dp == NULL) return 0;
 	while ( (dirp = readdir(dp) ) )
 	{
-		dfile = direct + "/" + dirp->d_name;
 		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
 		{
 			menu3[menu3_size]=dirp->d_name;
@@ -788,7 +801,7 @@ s32 main(s32 argc, char* argv[])
 	menu3_size++;
 	menu3_position=0;
 	menu_3:
-	draw_menu(Graphics,3,menu3_position,-1);
+	draw_menu(Graphics,3,menu3_position,-1,0);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -828,7 +841,7 @@ s32 main(s32 argc, char* argv[])
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,3,-1,menu3_position);
+					draw_menu(Graphics,3,-1,menu3_position,0);
 					sleep(0.05);
 					if (menu3_position<menu3_size-2) //Restore a backup
 					{
@@ -847,7 +860,7 @@ s32 main(s32 argc, char* argv[])
 								else Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to continue.");
 							}
 							else Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,3,-1,menu3_position);
+							draw_menu(Graphics,3,-1,menu3_position,0);
 							sleep(0.05);
 							goto menu_3;
 						}
@@ -862,12 +875,12 @@ s32 main(s32 argc, char* argv[])
 							ret=recursiveDelete(Graphics, mainfolder+"/backups");
 							if (ret == "")
 							{
-								draw_menu(Graphics,3,menu3_position,-1);
+								draw_menu(Graphics,3,menu3_position,-1,0);
 								Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
 								goto menu_1;
 							}
 							Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,3,-1,menu3_position);
+							draw_menu(Graphics,3,-1,menu3_position,0);
 							sleep(0.05);
 							goto menu_3;
 						}
