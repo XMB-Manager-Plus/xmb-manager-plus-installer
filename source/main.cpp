@@ -135,22 +135,6 @@ double get_filesize(const char *path, std::string format)
 	else return 0;
 }
 
-std::string get_md5_hash(char *filename)
-{
-	FILE *inFile = fopen (filename, "rb");
-	MD5_CTX mdContext;
-	int bytes;
-	unsigned char data[1024];
-
-	MD5Init (&mdContext);
-	while ((bytes = fread (data, 1, 1024, inFile)) != 0)
-		MD5Update (&mdContext, data, bytes);
-	fclose (inFile);
-	MD5Final (&mdContext);
-
-	return (std::string)mdContext->digest[1];
-}
-
 std::string copy_file(const char* cfrom, const char* ctoo)
 {
   FILE *from, *to;
@@ -517,54 +501,109 @@ int restore(NoRSX *Graphics, std::string foldername)
 {
 	MsgDialog Mess(Graphics);
 	std::string ret="";
-	ret=doit(Graphics,"restore", foldername, "", "");
-	if (ret == "") //restore success
+	std::string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	
+	Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+foldername+" backup?"+problems).c_str());
+	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		if (is_dev_blind_mounted()==0)
+		ret=doit(Graphics,"restore", foldername, "", "");
+		if (ret == "") //restore success
 		{
-			Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to reboot.").c_str());
-			unmount_dev_blind();
-			return 0;
+			if (is_dev_blind_mounted()==0)
+			{
+				Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to reboot.").c_str());
+				unmount_dev_blind();
+				return 2;
+			}
+			Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to continue.").c_str());
+			return 1;
 		}
-		else Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to continue.").c_str());
+		else //problem in the restore process so emit a warning
+		{
+			Mess.Dialog(MSG_ERROR,("Backup "+foldername+" has not restored! A error occured while restoring the backup!\n\nError: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
+		}
 	}
-	else //problem in the restore process so emit a warning
-	{
-		Mess.Dialog(MSG_ERROR,("Backup "+foldername+" has not restored! A error occured while restoring the backup!\n\nError: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
-	}
-	return 1;
+
+	return 0;
 }
 
 int install(NoRSX *Graphics, std::string firmware_choice, std::string app_choice)
 {
 	MsgDialog Mess(Graphics);
 	std::string ret="";
+	std::string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	std::string foldername=currentDateTime()+" Before "+app_choice;
 
-	ret=doit(Graphics,"backup", foldername, firmware_choice, app_choice);
-	if (ret == "") //backup success
+	Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?"+problems).c_str());
+	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=doit(Graphics,"install", "", firmware_choice, app_choice);
-		if (ret == "") //copy success
+		ret=doit(Graphics,"backup", foldername, firmware_choice, app_choice);
+		if (ret == "") //backup success
 		{
-			if (is_dev_blind_mounted()==0)
+			ret=doit(Graphics,"install", "", firmware_choice, app_choice);
+			if (ret == "") //copy success
 			{
-				Mess.Dialog(MSG_OK, (app_choice+" has installed with success.\nPress OK to reboot.").c_str());
-				unmount_dev_blind();
-				return 0;
+				if (is_dev_blind_mounted()==0)
+				{
+					Mess.Dialog(MSG_OK, (app_choice+" has installed with success.\nPress OK to reboot.").c_str());
+					unmount_dev_blind();
+					return 2;
+				}
+				Mess.Dialog(MSG_OK,(app_choice+" has installed with success.\nPress OK to continue.").c_str());
+				return 1;
 			}
-			else Mess.Dialog(MSG_OK,(app_choice+" has installed with success.\nPress OK to continue.").c_str());
+			else //problem in the copy process so rollback by restoring the backup
+			{
+				Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while copying files!\n\nError: "+ret+"\n\nBackup will be restored.").c_str());
+				return restore(Graphics, foldername);
+			}
 		}
-		else //problem in the copy process so rollback by restoring the backup
+		else //problem in the backup process so rollback by deleting the backup
 		{
-			Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while copying files!\n\nError: "+ret+"\n\nBackup will be restored.").c_str());
-			return restore(Graphics, foldername);
+			Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while doing backuping the files!\n\nError: "+ret+"\n\nIncomplete backup will be deleted.").c_str());
+			if (recursiveDelete(Graphics, mainfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
 		}
 	}
-	else //problem in the backup process so rollback by deleting the backup
+
+	return 0;
+}
+
+int delete_all(NoRSX *Graphics)
+{
+	MsgDialog Mess(Graphics);
+	std::string ret="";
+	std::string problems="\n\nPlease DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.";
+
+	Mess.Dialog(MSG_YESNO,("Are you sure you want to delete all backups?"+problems).c_str());
+	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while doing backuping the files!\n\nError: "+ret+"\n\nIncomplete backup will be deleted.").c_str());
-		if (recursiveDelete(Graphics, mainfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
+		ret=recursiveDelete(Graphics, mainfolder+"/backups");
+		if (ret == "") //delete sucess
+		{
+			Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
+			return 1;
+		}
+		else //problem in the delete process so emit a warning
+		{
+			Mess.Dialog(MSG_ERROR,("Backup folders were not deleted! A error occured while deleting the folders!\n\nError: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
+		}
+	}
+	return 0;
+}
+
+int show_terms(NoRSX *Graphics)
+{
+	MsgDialog Mess(Graphics);
+	if (exists((mainfolder+"/terms-accepted.cfg").c_str())!=1)//terms not yet accepted
+	{
+		Mess.Dialog(MSG_OK,"Permission is hereby granted, FREE of charge, to any person obtaining a copy of this software and associated configuration files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, publish, distribute, sublicense, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.");
+		Mess.Dialog(MSG_YESNO,"THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\nDo you accept this terms?");
+		if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
+		{
+			create_file((mainfolder+"/terms-accepted.cfg").c_str());
+			return 1;
+		}
+		else return 0;
 	}
 	return 1;
 }
@@ -626,8 +665,11 @@ s32 main(s32 argc, char* argv[])
 		pch = strtok (NULL,"/");
 	}
 
+	//Show terms and conditions
+	if (show_terms(Graphics)!=1) goto end;
+
 	//DETECT FIRMWARE CHANGES WERE
-	if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")==0 && exists((mainfolder+"/backups").c_str())==1)
+	if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")!=1 && exists((mainfolder+"/backups").c_str())==1)
 	{
 		Mess.Dialog(MSG_OK,"The system detected a firmware change. All previous backups will be deleted.");
 		ret=recursiveDelete(Graphics, mainfolder+"/backups");
@@ -742,13 +784,9 @@ s32 main(s32 argc, char* argv[])
 					{
 						menu1_position++;
 						if (menu1_position==menu1_size-2 && menu1_restore==0) menu1_position++;
-						goto menu_1;
 					}
-					else
-					{
-						menu1_position=0;
-						goto menu_1;
-					}
+					else menu1_position=0;
+					goto menu_1;
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
@@ -756,13 +794,9 @@ s32 main(s32 argc, char* argv[])
 					{
 						menu1_position--;
 						if (menu1_position==menu1_size-2 && menu1_restore==0) menu1_position--;
-						goto menu_1;
 					}
-					else
-					{
-						menu1_position=menu1_size-1;
-						goto menu_1;
-					}
+					else menu1_position=menu1_size-1;
+					goto menu_1;
 				}
 				if (paddata.BTN_CROSS)
 				{
@@ -773,29 +807,14 @@ s32 main(s32 argc, char* argv[])
 						app_choice=menu1[menu1_position];
 						if (menu2[menu1_position][0]=="All Firmwares" && menu2_size[menu1_position]==2)
 						{
-							Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
-							if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
-							{
-								if (install(Graphics, menu2[menu1_position][0], app_choice)==0) goto end_with_reboot;
-								else
-								{
-									draw_menu(Graphics,1,-1,menu1_position,0);
-									sleep(0.05);
-									goto menu_1;
-								}
-							}
+							if (install(Graphics, menu2[menu1_position][0], app_choice)==2) goto end_with_reboot;
 							else goto menu_1;
 						}
 						else goto continue_to_menu2;
 					}
-					else if (menu1_position<menu1_size-1)
-					{
-						goto continue_to_menu3;
-					}
-					else if (menu1_position<menu1_size)
-					{
-						goto end;
-					}
+					else if (menu1_position<menu1_size-1) goto continue_to_menu3;
+					else if (menu1_position<menu1_size) goto end;
+					else goto menu_1;
 				}
 			}
 		}
@@ -818,55 +837,26 @@ s32 main(s32 argc, char* argv[])
 				if (paddata.BTN_CIRCLE) goto menu_1;
 				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 				{
-					if (menu2_position<menu2_size[menu1_position]-1)
-					{
-						menu2_position++;
-						goto menu_2;
-					}
-					else
-					{
-						menu2_position=0;
-						goto menu_2;
-					}
+					if (menu2_position<menu2_size[menu1_position]-1) menu2_position++;
+					else menu2_position=0;
+					goto menu_2;
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
-					if (menu2_position>0)
-					{
-						menu2_position--;
-						goto menu_2;
-					}
-					else
-					{
-						menu2_position=menu2_size[menu1_position]-1;
-						goto menu_2;
-					}
+					if (menu2_position>0) menu2_position--;
+					else menu2_position=menu2_size[menu1_position]-1;
+					goto menu_2;
 				}
 				if (paddata.BTN_CROSS)
 				{
+					draw_menu(Graphics,2,-1,menu2_position,menu1_position);
+					sleep(0.05);
 					if (menu2_position<menu2_size[menu1_position]-1)
 					{
-						draw_menu(Graphics,2,-1,menu2_position,menu1_position);
-						sleep(0.05);
-						Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
-						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
-						{
-							if (install(Graphics, menu2[menu1_position][menu2_position], app_choice)==0) goto end_with_reboot;
-							else
-							{
-								draw_menu(Graphics,2,-1,menu2_position,menu1_position);
-								sleep(0.05);
-								goto menu_2;
-							}
-						}
+						if (install(Graphics, menu2[menu1_position][menu2_position], app_choice)==2) goto end_with_reboot;
 						else goto menu_2;
 					}
-					else
-					{
-						draw_menu(Graphics,2,-1,menu2_position,menu1_position);
-						sleep(0.05);
-						goto menu_1;
-					}
+					else goto menu_1;
 				}
 			}
 		}
@@ -907,29 +897,15 @@ s32 main(s32 argc, char* argv[])
 				if (paddata.BTN_CIRCLE) goto menu_1;
 				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 				{
-					if (menu3_position<menu3_size-1)
-					{
-						menu3_position++;
-						goto menu_3;
-					}
-					else
-					{
-						menu3_position=0;
-						goto menu_3;
-					}
+					if (menu3_position<menu3_size-1) menu3_position++;
+					else menu3_position=0;
+					goto menu_3;
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
-					if (menu3_position>0)
-					{
-						menu3_position--;
-						goto menu_3;
-					}
-					else
-					{
-						menu3_position=menu3_size-1;
-						goto menu_3;
-					}
+					if (menu3_position>0) menu3_position--;
+					else menu3_position=menu3_size-1;
+					goto menu_3;
 				}
 				if (paddata.BTN_CROSS)
 				{
@@ -937,52 +913,23 @@ s32 main(s32 argc, char* argv[])
 					sleep(0.05);
 					if (menu3_position<menu3_size-2) //Restore a backup
 					{
-						Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+menu3[menu3_position]+" backup?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
-						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
-						{
-							if (restore(Graphics, menu3[menu3_position])==0) goto end_with_reboot;
-							else
-							{
-								draw_menu(Graphics,3,-1,menu3_position,0);
-								sleep(0.05);
-								goto menu_3;
-							}
-						}
+						if (restore(Graphics, menu3[menu3_position])==2) goto end_with_reboot;
 						else goto menu_3;
 					}
 					else if (menu3_position<menu3_size-1) //Delete all backups
 					{
-						Mess.Dialog(MSG_YESNO,"Are you sure you want to delete all backups?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.");
-						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
-						{
-							ret="";
-							ret=recursiveDelete(Graphics, mainfolder+"/backups");
-							if (ret == "")
-							{
-								draw_menu(Graphics,3,menu3_position,-1,0);
-								Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
-								goto menu_1;
-							}
-							Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,3,-1,menu3_position,0);
-							sleep(0.05);
-							goto menu_3;
-						}
+						if (delete_all(Graphics)==1) goto menu_1;
 						else goto menu_3;
 					}
-					else //Return to Main Menu
-					{
-						goto menu_1;
-					}
+					else goto menu_1;
 				}
 			}
 		}
-		
 	}
-
 
 	end_with_reboot:
 	{
+		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 		//This will uninit the NoRSX lib
 		Graphics->NoRSX_Exit();
 		//this will uninitialize the controllers
@@ -992,6 +939,7 @@ s32 main(s32 argc, char* argv[])
 
 	end:
 	{
+		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 		//This will uninit the NoRSX lib
 		Graphics->NoRSX_Exit();
 		//this will uninitialize the controllers
