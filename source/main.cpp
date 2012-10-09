@@ -19,11 +19,11 @@
 std::string mainfolder;
 std::string fw_version="";
 std::string ttype="";
-std::string menu1[10];
+std::string menu1[20];
 int menu1_size=0;
 int menu1_restore=1;
-std::string menu2[10][10];
-int menu2_size[10];
+std::string menu2[20][20];
+int menu2_size[20];
 std::string menu3[30];
 int menu3_size=0;
 
@@ -66,6 +66,34 @@ s32 lv2_get_target_type(uint64_t *type)
 	return_to_user_prog(s32);
 }
 
+int is_dev_blind_mounted()
+{
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+	sysFSStat dir;
+
+	return sysFsStat(MOUNT_POINT, &dir);
+}
+
+int mount_dev_blind()
+{
+	const char* DEV_BLIND = "CELL_FS_IOS:BUILTIN_FLSH1";	// dev_flash
+	const char* FAT = "CELL_FS_FAT"; //it's also for fat32
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+
+	sysFsMount(DEV_BLIND, FAT, MOUNT_POINT, 0);
+
+	return 0;
+}
+
+int unmount_dev_blind()
+{
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+
+	sysFsUnmount(MOUNT_POINT);
+
+	return 0;
+}
+
 void debug_print(NoRSX *Graphics, std::string text)
 {
 	Background B1(Graphics);
@@ -74,6 +102,53 @@ void debug_print(NoRSX *Graphics, std::string text)
 	F1.Printf(100, 100,0xffffff,20, "%s", text.c_str());
 	Graphics->Flip();
 	sleep(10);
+}
+
+double get_free_space(const char *path, std::string format)
+{
+	double free_disk_space;
+	uint32_t block_size;
+	uint64_t free_block_count;
+
+	sysFsGetFreeSize(path, &block_size, &free_block_count);
+	free_disk_space = (((uint64_t) block_size * free_block_count));
+	if (format=="KB") free_disk_space = free_disk_space / 1024.00; // convert to KB
+	if (format=="MB") free_disk_space = free_disk_space / 1048576.00; // convert to MB
+	if (format=="GB") free_disk_space = free_disk_space / 1073741824.00; // convert to GB
+	
+	return free_disk_space;
+}
+
+double get_filesize(const char *path, std::string format)
+{
+	sysFSStat info;
+	double filesize;
+
+	if (sysFsStat(path, &info) >= 0)
+	{
+		filesize=(double)info.st_size;
+		if (format=="KB") filesize = filesize / 1024.00; // convert to KB
+		if (format=="MB") filesize = filesize / 1048576.00; // convert to MB
+		if (format=="GB") filesize = filesize / 1073741824.00; // convert to GB
+		return filesize;
+	}
+	else return 0;
+}
+
+std::string get_md5_hash(char *filename)
+{
+	FILE *inFile = fopen (filename, "rb");
+	MD5_CTX mdContext;
+	int bytes;
+	unsigned char data[1024];
+
+	MD5Init (&mdContext);
+	while ((bytes = fread (data, 1, 1024, inFile)) != 0)
+		MD5Update (&mdContext, data, bytes);
+	fclose (inFile);
+	MD5Final (&mdContext);
+
+	return (std::string)mdContext->digest[1];
 }
 
 std::string copy_file(const char* cfrom, const char* ctoo)
@@ -120,7 +195,6 @@ int exists(const char *path)
 	if (sysFsStat(path, &info) >= 0) return 1;
 	return 0;
 }
-
 
 const std::string fileCreatedDateTime(const char *path)
 {
@@ -231,42 +305,14 @@ std::string correct_path(std::string dpath, int what)
 
 	cpath=dpath;
 	if (what==1 || what==2) replace(cpath.begin(), cpath.end(), '~', '/');
+	if (what==1 || what==2) if (cpath.find("PS3~")!=std::string::npos) cpath.replace( cpath.find("PS3~"), 4, "");
 	if (what==2) if (cpath.find("dev_flash")!=std::string::npos) cpath.replace( cpath.find("dev_flash"), 9, "dev_blind");
 
 	return "/"+cpath;
 }
 
-int is_dev_blind_mounted()
+std::string doit(NoRSX *Graphics, std::string operation, std::string foldername, std::string fw, std::string app)
 {
-	const char* MOUNT_POINT = "/dev_blind"; //our mount point
-	sysFSStat dir;
-
-	return sysFsStat(MOUNT_POINT, &dir);
-}
-
-int mount_dev_blind()
-{
-	const char* DEV_BLIND = "CELL_FS_IOS:BUILTIN_FLSH1";	// dev_flash
-	const char* FAT = "CELL_FS_FAT"; //it's also for fat32
-	const char* MOUNT_POINT = "/dev_blind"; //our mount point
-
-	sysFsMount(DEV_BLIND, FAT, MOUNT_POINT, 0);
-
-	return 0;
-}
-
-int unmount_dev_blind()
-{
-	const char* MOUNT_POINT = "/dev_blind"; //our mount point
-
-	sysFsMount(MOUNT_POINT);
-
-	return 0;
-}
-std::string doit(NoRSX *Graphics, std::string operation, std::string restorefolder, std::string fw, std::string app)
-{
-	std::string foldername;
-
 	DIR *dp;
 	struct dirent *dirp;
 	std::string source_paths[100];
@@ -280,14 +326,13 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	int mountblind=0;
 	int dirnotfound=0;
 	std::string ret="";
-
+	std::string ret2="";
 	MsgDialog Messa(Graphics);
 
 	if (operation=="backup")
 	{
-		foldername=currentDateTime();
 		create_dir(mainfolder+"/backups");
-		create_dir(mainfolder+"/backups/" + foldername+" Before "+app);
+		create_dir(mainfolder+"/backups/" + foldername);
 		check_path=mainfolder+"/apps/"+app+"/"+fw_version+"/"+fw;
 		dp = opendir (check_path.c_str());
 		if (dp == NULL) return "Cannot open directory "+check_path;
@@ -295,12 +340,12 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 		{
 			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
 			{
-				create_dir(mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name);
+				create_dir(mainfolder+"/backups/"+foldername+"/"+dirp->d_name);
 				check_paths[findex]=mainfolder+"/apps/"+app+"/"+fw_version+"/"+fw+"/"+dirp->d_name;
 				if (exists(correct_path(dirp->d_name,1).c_str())==0) dirnotfound=1;
 				source_paths[findex]=correct_path(dirp->d_name,2);
 				if (source_paths[findex].find("dev_blind")!=std::string::npos) mountblind=1;
-				dest_paths[findex]=mainfolder+"/backups/" + foldername+" Before "+app+"/"+dirp->d_name;
+				dest_paths[findex]=mainfolder+"/backups/"+foldername+"/"+dirp->d_name;
 				findex++;
 			}
 		}
@@ -309,7 +354,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 	}
 	else if (operation=="restore")
 	{
-		check_path=mainfolder+"/backups/"+restorefolder;
+		check_path=mainfolder+"/backups/"+foldername;
 		dp = opendir (check_path.c_str());
 		if (dp == NULL) return "Cannot open directory "+check_path;
 		while ( (dirp = readdir(dp) ) )
@@ -370,28 +415,20 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string restorefold
 				destfile=dest_paths[j]+"/"+dirp->d_name;
 				if (!(operation=="backup" && exists(sourcefile.c_str())==0))
 				{
-					draw_copy(Graphics, title, sourcefile, destfile);
-					//sleep(10);
-					ret=copy_file(sourcefile.c_str(), destfile.c_str());
-					if (ret != "")
+					//Disk space check
+					if (get_filesize(sourcefile.c_str(),"") >= get_free_space(destfile.c_str(),"")) ret="Not enough space to copy the file ("+(std::string)dirp->d_name+") to destination path ("+dest_paths[j].c_str()+").";
+					else
 					{
-						//Implemet rollback in caso of error while copying
-						/*if (operation=="backup") //delete backup
-						{
-							Mess.Dialog(MSG_ERROR,"An error occured during backup. Backup files will be deleted.");
-							ret=recursiveDelete(Graphics, mainfolder+"/backups/" + foldername+" Before "+app);
-							return ret;
-						}
-						if (operation=="install") //rollback
-						{
-							Mess.Dialog(MSG_ERROR,"An error occured during install. Operation will rollback.");
-							ret=doit(Graphics,"restore", foldername+" Before "+app, "", "");
-							return ret;
-						}*/
-
-						return ret;
+						draw_copy(Graphics, title, sourcefile, destfile);
+						//sleep(4);
+						ret=copy_file(sourcefile.c_str(), destfile.c_str());
 					}
-					//Implement file compare
+					//source and dest file compare [TODO] 
+					//simulate errors
+					//if (operation=="backup" && strcmp(dirp->d_name, "explore_plugin_full.rco")!=0) ret="simulate backup error";
+					//if (operation=="install" && strcmp(dirp->d_name, "explore_plugin_full.rco")!=0) ret="simulate install error";
+					//if (operation=="restore" && strcmp(dirp->d_name, "explore_plugin_full.rco")!=0) ret="simulate restore error";
+					if (ret != "") return ret;
 				}
 			}
 		}
@@ -476,6 +513,61 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, int menu1_
 	return 0;
 }
 
+int restore(NoRSX *Graphics, std::string foldername)
+{
+	MsgDialog Mess(Graphics);
+	std::string ret="";
+	ret=doit(Graphics,"restore", foldername, "", "");
+	if (ret == "") //restore success
+	{
+		if (is_dev_blind_mounted()==0)
+		{
+			Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to reboot.").c_str());
+			unmount_dev_blind();
+			return 0;
+		}
+		else Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to continue.").c_str());
+	}
+	else //problem in the restore process so emit a warning
+	{
+		Mess.Dialog(MSG_ERROR,("Backup "+foldername+" has not restored! A error occured while restoring the backup!\n\nError: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
+	}
+	return 1;
+}
+
+int install(NoRSX *Graphics, std::string firmware_choice, std::string app_choice)
+{
+	MsgDialog Mess(Graphics);
+	std::string ret="";
+	std::string foldername=currentDateTime()+" Before "+app_choice;
+
+	ret=doit(Graphics,"backup", foldername, firmware_choice, app_choice);
+	if (ret == "") //backup success
+	{
+		ret=doit(Graphics,"install", "", firmware_choice, app_choice);
+		if (ret == "") //copy success
+		{
+			if (is_dev_blind_mounted()==0)
+			{
+				Mess.Dialog(MSG_OK, (app_choice+" has installed with success.\nPress OK to reboot.").c_str());
+				unmount_dev_blind();
+				return 0;
+			}
+			else Mess.Dialog(MSG_OK,(app_choice+" has installed with success.\nPress OK to continue.").c_str());
+		}
+		else //problem in the copy process so rollback by restoring the backup
+		{
+			Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while copying files!\n\nError: "+ret+"\n\nBackup will be restored.").c_str());
+			return restore(Graphics, foldername);
+		}
+	}
+	else //problem in the backup process so rollback by deleting the backup
+	{
+		Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while doing backuping the files!\n\nError: "+ret+"\n\nIncomplete backup will be deleted.").c_str());
+		if (recursiveDelete(Graphics, mainfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
+	}
+	return 1;
+}
 
 s32 main(s32 argc, char* argv[])
 {
@@ -684,26 +776,13 @@ s32 main(s32 argc, char* argv[])
 							Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 							if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 							{
-								firmware_choice=menu2[menu1_position][0];
-								ret="";
-								ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
-								if (ret == "")
+								if (install(Graphics, menu2[menu1_position][0], app_choice)==0) goto end_with_reboot;
+								else
 								{
-									ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
-									if (ret == "")
-									{
-										if (is_dev_blind_mounted()==0)
-										{
-											Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
-											goto end_with_reboot;
-										}
-										else Mess.Dialog(MSG_OK,"Installed!\nPress OK to continue.");
-									}
+									draw_menu(Graphics,1,-1,menu1_position,0);
+									sleep(0.05);
+									goto menu_1;
 								}
-								else Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
-								draw_menu(Graphics,1,-1,menu1_position,0);
-								sleep(0.05);
-								goto menu_1;
 							}
 							else goto menu_1;
 						}
@@ -772,26 +851,13 @@ s32 main(s32 argc, char* argv[])
 						Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							firmware_choice=menu2[menu1_position][menu2_position];
-							ret="";
-							ret=doit(Graphics,"backup", "-", firmware_choice, app_choice);
-							if (ret == "")
+							if (install(Graphics, menu2[menu1_position][menu2_position], app_choice)==0) goto end_with_reboot;
+							else
 							{
-								ret=doit(Graphics,"install", "-", firmware_choice, app_choice);
-								if (ret == "")
-								{
-									if (is_dev_blind_mounted()==0)
-									{
-										Mess.Dialog(MSG_OK,"Installed!\nPress OK to reboot.");
-										goto end_with_reboot;
-									}
-									else Mess.Dialog(MSG_OK,"Installed!\nPress OK to continue.");
-								}
+								draw_menu(Graphics,2,-1,menu2_position,menu1_position);
+								sleep(0.05);
+								goto menu_2;
 							}
-							else Mess.Dialog(MSG_ERROR,("Not installed!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,2,-1,menu2_position,menu1_position);
-							sleep(0.05);
-							goto menu_2;
 						}
 						else goto menu_2;
 					}
@@ -874,21 +940,13 @@ s32 main(s32 argc, char* argv[])
 						Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+menu3[menu3_position]+" backup?\n\nPlease be adviced that this process can take a while (depending on the files size) and can change dev_flash files so don't turn off your PS3 while the process in running.").c_str());
 						if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 						{
-							ret="";
-							ret=doit(Graphics,"restore", menu3[menu3_position], "", "");
-							if (ret == "")
+							if (restore(Graphics, menu3[menu3_position])==0) goto end_with_reboot;
+							else
 							{
-								if (is_dev_blind_mounted()==0)
-								{
-									Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to reboot.");
-									goto end_with_reboot;
-								}
-								else Mess.Dialog(MSG_OK,"Backup restored!\nPress OK to continue.");
+								draw_menu(Graphics,3,-1,menu3_position,0);
+								sleep(0.05);
+								goto menu_3;
 							}
-							else Mess.Dialog(MSG_ERROR,("Backup not restored!\n\nError: "+ret).c_str());
-							draw_menu(Graphics,3,-1,menu3_position,0);
-							sleep(0.05);
-							goto menu_3;
 						}
 						else goto menu_3;
 					}
@@ -929,7 +987,6 @@ s32 main(s32 argc, char* argv[])
 		Graphics->NoRSX_Exit();
 		//this will uninitialize the controllers
 		ioPadEnd();
-		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 		reboot_sys(); //reboot
 	}
 
@@ -939,7 +996,6 @@ s32 main(s32 argc, char* argv[])
 		Graphics->NoRSX_Exit();
 		//this will uninitialize the controllers
 		ioPadEnd();
-		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 	}
 	return 0;
 }
