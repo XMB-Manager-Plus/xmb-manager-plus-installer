@@ -16,6 +16,7 @@
 
 #define MAX_BUFFERS 2
 
+//global vars
 std::string mainfolder;
 std::string fw_version="";
 std::string ttype="";
@@ -26,40 +27,74 @@ std::string menu2[20][20];
 int menu2_size[20];
 std::string menu3[30];
 int menu3_size=0;
-
+NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
+Background B1(Graphics);
+Font F1(LATIN2, Graphics);
+Font F2(LATIN2, Graphics);
+MsgDialog Mess(Graphics);
 msgType MSG_OK = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
 msgType MSG_ERROR = (msgType)(MSG_DIALOG_ERROR | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
-msgType MSG_YESNO = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DEFAULT_CURSOR_NO);
+msgType MSG_YESNO_DNO = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DEFAULT_CURSOR_NO);
+msgType MSG_YESNO_DYES = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO);
 
+//headers
+s32 lv2_get_platform_info(uint8_t platform_info[0x18]);
+s32 sysFsMount(const char* MOUNT_POINT, const char* TYPE_OF_FILESYSTEM, const char* PATH_TO_MOUNT, int IF_READ_ONLY);
+s32 sysFsUnmount(const char* PATH_TO_UNMOUNT);
+u32 reboot_sys();
+s32 lv2_get_target_type(uint64_t *type);
+int is_dev_blind_mounted();
+int mount_dev_blind();
+int unmount_dev_blind();
+void debug_print(std::string text);
+std::string convert_size(double size, std::string format);
+double get_free_space(const char *path);
+double get_filesize(const char *path);
+std::string create_file(const char* cpath);
+int exists(const char *path);
+const std::string fileCreatedDateTime(const char *path);
+const std::string currentDateTime();
+s32 create_dir(std::string dirtocreate);
+std::string recursiveDelete(std::string direct);
+s32 center_text_x(int fsize, const char* message);
+std::string int_to_string(int number);
+void draw_copy(std::string title, const char *dirfrom, const char *dirto, const char *filename, std::string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize);
+std::string copy_file(std::string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag);
+bool replace(std::string& str, const std::string& from, const std::string& to);
+std::string correct_path(std::string dpath, int what);
+std::string doit(std::string operation, std::string foldername, std::string fw, std::string app);
+void draw_menu(int menu_id, int selected,int choosed, int menu1_position);
+int restore(std::string foldername);
+int install(std::string firmware_choice, std::string app_choice);
+int delete_all();
+int show_terms();
+int main(s32 argc, char* argv[]);
+
+//functions
 s32 lv2_get_platform_info(uint8_t platform_info[0x18])
 {
 	lv2syscall1(387, (uint64_t) platform_info);
 	return_to_user_prog(s32);
 }
 
-s32 sysFsMount(const char* MOUNT_POINT, const char* TYPE_OF_FILESYSTEM, const char* PATH_TO_MOUNT, int IF_READ_ONLY){
+s32 sysFsMount(const char* MOUNT_POINT, const char* TYPE_OF_FILESYSTEM, const char* PATH_TO_MOUNT, int IF_READ_ONLY)
+{
 	lv2syscall8(837, (u64)MOUNT_POINT, (u64)TYPE_OF_FILESYSTEM, (u64)PATH_TO_MOUNT, 0, IF_READ_ONLY, 0, 0, 0);
 	return_to_user_prog(s32);
 }
 
-s32 sysFsUnmount(const char* PATH_TO_UNMOUNT){
+s32 sysFsUnmount(const char* PATH_TO_UNMOUNT)
+{
 	lv2syscall1(838, (u64)PATH_TO_UNMOUNT);
 	return_to_user_prog(s32);
 }
 
-u32 reboot_sys(){ 
+u32 reboot_sys()
+{ 
 	lv2syscall4(379,0x200,0,0,0);
 	return_to_user_prog(u32);
 }
 
-/*
- * lv2_get_target_type
- *
- * Types:
- * 	1 - Retail
- * 	2 - Debug
- * 	3 - Reference Tool
- */
 s32 lv2_get_target_type(uint64_t *type)
 {
 	lv2syscall1(985, (uint64_t) type);
@@ -94,11 +129,9 @@ int unmount_dev_blind()
 	return 0;
 }
 
-void debug_print(NoRSX *Graphics, std::string text)
+void debug_print(std::string text)
 {
-	Background B1(Graphics);
 	B1.Mono(COLOR_BLACK);
-	Font F1(LATIN2, Graphics);
 	F1.Printf(100, 100,0xffffff,20, "%s", text.c_str());
 	Graphics->Flip();
 	sleep(10);
@@ -141,7 +174,6 @@ double get_filesize(const char *path)
 	if (sysFsStat(path, &info) >= 0) return (double)info.st_size;
 	else return 0;
 }
-
 
 std::string create_file(const char* cpath)
 {
@@ -196,13 +228,11 @@ s32 create_dir(std::string dirtocreate)
 	return mkdir(dirtocreate.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 }
 
-std::string recursiveDelete(NoRSX *Graphics, std::string direct)
+std::string recursiveDelete(std::string direct)
 {
 	std::string dfile;
 	DIR *dp;
 	struct dirent *dirp;
-
-	MsgDialog Messa(Graphics);
 
 	dp = opendir (direct.c_str());
 	if (dp != NULL)
@@ -212,15 +242,15 @@ std::string recursiveDelete(NoRSX *Graphics, std::string direct)
 			dfile = direct + "/" + dirp->d_name;
 			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
 			{
-				//Messa.Dialog(MSG_OK,("Testing: "+dfile).c_str());
+				//Mess.Dialog(MSG_OK,("Testing: "+dfile).c_str());
 				if (dirp->d_type == DT_DIR)
 				{
-					//Messa.Dialog(MSG_OK,("Is directory: "+dfile).c_str());
-					recursiveDelete(Graphics,dfile);
+					//Mess.Dialog(MSG_OK,("Is directory: "+dfile).c_str());
+					recursiveDelete(dfile);
 				}
 				else
 				{
-					//Messa.Dialog(MSG_OK,("Deleting file: "+dfile).c_str());
+					//Mess.Dialog(MSG_OK,("Deleting file: "+dfile).c_str());
 					if ( sysFsUnlink(dfile.c_str()) != 0) return "Couldn't delete file "+dfile+"\n"+strerror(errno);
 				}
 			}
@@ -228,12 +258,12 @@ std::string recursiveDelete(NoRSX *Graphics, std::string direct)
 		(void) closedir (dp);
 	}
 	else return "Couldn't open the directory";
-	//Messa.Dialog(MSG_OK,("Deleting folder: "+direct).c_str());
+	//Mess.Dialog(MSG_OK,("Deleting folder: "+direct).c_str());
 	if ( rmdir(direct.c_str()) != 0) return "Couldn't delete directory "+direct+"\n"+strerror(errno);
 	return "";
 }
 
-s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
+s32 center_text_x(int fsize, const char* message)
 {
 	return (Graphics->width-(strlen(message)*fsize/2))/2;
 }
@@ -254,85 +284,76 @@ std::string int_to_string(int number)
 	return returnvalue;
 }
 
-std::string compare_files(std::string cfrom, std::string ctoo)
-{
-	FILE *fp1, *fp2;
-	char ch1, ch2;
-
-	if ((fp1 = fopen(cfrom.c_str(), "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
-	if ((fp2 = fopen(ctoo.c_str(), "rb"))==NULL) return "Cannot open destination file ("+(std::string)ctoo+") for reading!";
-	while(!feof(fp1))
-	{
-		ch1 = fgetc(fp1);
-		if(ferror(fp1))  return "Error reading source file ("+(std::string)cfrom+")!";
-		ch2 = fgetc(fp2);
-		if (ferror(fp2)) return "Error reading destination file ("+(std::string)ctoo+")!";
-		if (ch1 != ch2) return "Source and destination files are different!";
-	}
-	if (fclose(fp1)==EOF) return "Cannot close source file ("+(std::string)cfrom+")!";
-	if (fclose(fp2)==EOF) return "Cannot close destination file ("+(std::string)ctoo+")!";
-
-	return "";
-}
-
-void draw_copy(NoRSX *Graphics, std::string title, const char *dirfrom, const char *dirto, const char *filename, std::string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
+void draw_copy(std::string title, const char *dirfrom, const char *dirto, const char *filename, std::string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
 {
 	int sizeTitleFont = 30;
 	int sizeFont = 18;
 	std::string current;
-	Font F1(LATIN2, Graphics);
-	Font F2(LATIN2, Graphics);
-	Background B1(Graphics);
 
 	B1.Mono(COLOR_BLACK);
-	F1.Printf(center_text_x(Graphics, sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
+	F1.Printf(center_text_x(sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
 	F2.Printf(100, 260, COLOR_WHITE, sizeFont, "Filename: %s", ((std::string)filename+" ("+convert_size(get_filesize(cfrom.c_str()), "auto").c_str()+")").c_str());
 	F2.Printf(100, 320, COLOR_WHITE, sizeFont, "From: %s", dirfrom);
 	F2.Printf(100, 350, COLOR_WHITE, sizeFont, "To: %s", dirto);
 	current=convert_size(copy_currentsize+(double)countsize, "auto")+" of "+convert_size(copy_totalsize, "auto").c_str()+" copied ("+int_to_string(numfiles_current).c_str()+" of "+int_to_string(numfiles_total).c_str()+" files)";
-	F2.Printf(center_text_x(Graphics, sizeTitleFont, current.c_str()), 410, COLOR_WHITE, sizeFont, "%s", current.c_str());
+	F2.Printf(center_text_x(sizeTitleFont, current.c_str()), 410, COLOR_WHITE, sizeFont, "%s", current.c_str());
 	Graphics->Flip();
 }
 
-std::string copy_file(NoRSX *Graphics, std::string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total)
+std::string copy_file(std::string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag)
 {
 	std::string cfrom=(std::string)dirfrom+(std::string)filename;
 	std::string ctoo=(std::string)dirto+(std::string)filename;
 	FILE *from, *to;
-	char buf[8192]; // BUFSIZE default is 8192 bytes
-	size_t size;
+	char buf[8192], buf2[8192]; // BUFSIZE default is 8192 bytes
+	std::string ret="";
+	size_t size=0;
 	size_t countsize=0;
 	time_t start, now;
 
-	if ((from = fopen(cfrom.c_str(), "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
-	if((to = fopen(ctoo.c_str(), "wb"))==NULL) return "Cannot open destination file ("+(std::string)ctoo+") for writing!";
-	draw_copy(Graphics, title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
+	if ((from = fopen(cfrom.c_str(), "rb"))==NULL) return "Cannot open source file ("+cfrom+") for reading!";
+	if (check_flag==1)
+	{
+		if ((to = fopen(ctoo.c_str(), "rb"))==NULL) return "Cannot open destination file ("+ctoo+") for reading!";
+	}
+	else if ((to = fopen(ctoo.c_str(), "wb"))==NULL) return "Cannot open destination file ("+ctoo+") for writing!";
+	draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
 	start = time(NULL);
 	time(&start);
 	while(!feof(from))
 	{
 		size = fread(buf, 1, 8192, from);
-		if(ferror(from))  return "Error reading source file ("+(std::string)cfrom+")!";
-		fwrite(buf, 1, size, to);
-		if (ferror(to)) return "Error writing destination file ("+(std::string)ctoo+")!";
+		if(ferror(from))  return "Error reading source file ("+cfrom+")!";
+		if (check_flag==1)
+		{
+			size = fread(buf2, 1, 8192, to);
+			if (ferror(to)) return "Error reading destination file ("+ctoo+")!";
+			if (memcmp(buf, buf2, 8192)!=0) return "Source and destination files are different!";
+		}
+		else
+		{
+			fwrite(buf, 1, size, to);
+			if (ferror(to)) return "Error writing destination file ("+ctoo+")!";
+		}
 		countsize=countsize+size;
 		now = time(NULL);
 		time(&now);
-		if (difftime(now,start)>=0.5)
+		if (difftime(now,start)>=0.3)
 		{
-			draw_copy(Graphics, title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
+			draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
 			start = time(NULL);
 			time(&start);
 		}
 	}
 
-	if (fclose(from)==EOF) return "Cannot close source file ("+(std::string)cfrom+")!";
-	if (fclose(to)==EOF) return "Cannot close destination file ("+(std::string)ctoo+")!";
+	if (fclose(from)==EOF) return "Cannot close source file ("+cfrom+")!";
+	if (fclose(to)==EOF) return "Cannot close destination file ("+ctoo+")!";
 
-	return compare_files(cfrom, ctoo);
+	return "";
 }
 
-bool replace(std::string& str, const std::string& from, const std::string& to) {
+bool replace(std::string& str, const std::string& from, const std::string& to)
+{
     size_t start_pos = str.find(from);
     if(start_pos == std::string::npos)
         return false;
@@ -352,7 +373,7 @@ std::string correct_path(std::string dpath, int what)
 	return "/"+cpath;
 }
 
-std::string doit(NoRSX *Graphics, std::string operation, std::string foldername, std::string fw, std::string app)
+std::string doit(std::string operation, std::string foldername, std::string fw, std::string app)
 {
 	DIR *dp;
 	struct dirent *dirp;
@@ -447,7 +468,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string foldername,
 		create_file("/dev_blind/vsh/resource/explore/xmb/xmbmp.cfg");
 	}
 
-	//copy files
+	//count files
 	for(j=0;j<findex;j++)
 	{
 		if (operation=="backup") check_path=check_paths[j];
@@ -469,6 +490,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string foldername,
 		closedir(dp);
 	}
 
+	//copy files
 	for(j=0;j<findex;j++)
 	{
 		if (operation=="backup") check_path=check_paths[j];
@@ -488,7 +510,7 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string foldername,
 					freespace_size=get_free_space(dest_paths[j].c_str())+dest_size;
 					//Disk space check 
 					if (source_size >= freespace_size) ret="Not enough space to copy the file ("+(std::string)dirp->d_name+") to destination path ("+dest_paths[j].c_str()+").";
-					else ret=copy_file(Graphics, title, (source_paths[j]+"/").c_str(), (dest_paths[j]+"/").c_str(), dirp->d_name, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total);
+					else ret=copy_file(title, (source_paths[j]+"/").c_str(), (dest_paths[j]+"/").c_str(), dirp->d_name, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,0);
 					if (ret != "") return ret;
 					copy_currentsize+=source_size;
 					numfiles_current+=1;
@@ -497,15 +519,42 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string foldername,
 		}
 		closedir(dp);
 	}
+
+	//check files
+	copy_currentsize=0;
+	numfiles_current=0;
+	for(j=0;j<findex;j++)
+	{
+		if (operation=="backup") check_path=check_paths[j];
+		else check_path=source_paths[j];
+		dp = opendir (check_path.c_str());
+		if (dp == NULL) return "Cannot open directory "+check_path;
+		while ( (dirp = readdir(dp) ) )
+		{
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				sourcefile=source_paths[j]+"/"+dirp->d_name;
+				destfile=dest_paths[j]+"/"+dirp->d_name;
+				if (!(operation=="backup" && exists(sourcefile.c_str())==0))
+				{
+					ret=copy_file("Checking files ...", (source_paths[j]+"/").c_str(), (dest_paths[j]+"/").c_str(), dirp->d_name, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,1);
+					if (ret != "") return ret;
+					copy_currentsize+=source_size;
+					numfiles_current+=1;
+				}
+			}
+		}
+		closedir(dp);
+	}
+
 	return "";
 }
 
-s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, int menu1_position)
+void draw_menu(int menu_id, int selected,int choosed, int menu1_position)
 {
 	std::string IMAGE_PATH=mainfolder+"/data/images/logo.png";
 	int posy=0;
 
-	Background B1(Graphics);
     //i want to display a PNG. i need to define the structure pngData (jpgData if you need to load a JPG).
     pngData png;
 	//i need as first thing to initializa the Image class:
@@ -518,15 +567,13 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, int menu1_
 	I1.AlphaDrawIMG(imgX,imgY,&png);
 	int sizeTitleFont = 30;
 	int sizeFont = 25;
-	int menu_color;
-	Font F1(LATIN2, Graphics);
-	Font F2(LATIN2, Graphics);
+	int menu_color=COLOR_WHITE;
 	std::string menu1_text;
 
 	posy=260;
 	if (menu_id==1)
 	{
-		F1.Printf(center_text_x(Graphics, sizeTitleFont, "INSTALLER MENU"),220, 0xd38900, sizeTitleFont, "INSTALLER MENU");
+		F1.Printf(center_text_x(sizeTitleFont, "INSTALLER MENU"),220, 0xd38900, sizeTitleFont, "INSTALLER MENU");
 		for(int j=0;j<menu1_size;j++)
 		{
 			if (j<menu1_size-1) posy=posy+sizeFont+4;
@@ -538,12 +585,12 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, int menu1_
 			if (j<menu1_size-2) menu1_text="INSTALL "+menu1[j];
 			else menu1_text=menu1[j];
 
-			F2.Printf(center_text_x(Graphics, sizeFont, menu1_text.c_str()),posy,menu_color,sizeFont, "%s",menu1_text.c_str());
+			F2.Printf(center_text_x(sizeFont, menu1_text.c_str()),posy,menu_color,sizeFont, "%s",menu1_text.c_str());
 		}
 	}
 	else if (menu_id==2)
 	{
-		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
+		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
 		for(int j=0;j<menu2_size[menu1_position];j++)
 		{
 			if (j<menu2_size[menu1_position]-1) posy=posy+sizeFont+4;
@@ -551,12 +598,12 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, int menu1_
 			if (j==choosed) menu_color=COLOR_RED;
 			else if (j==selected) menu_color=COLOR_YELLOW;
 			else menu_color=COLOR_WHITE;
-			F2.Printf(center_text_x(Graphics, sizeFont, menu2[menu1_position][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[menu1_position][j].c_str());
+			F2.Printf(center_text_x(sizeFont, menu2[menu1_position][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[menu1_position][j].c_str());
 		}
 	}
 	else if (menu_id==3)
 	{
-		F1.Printf(center_text_x(Graphics, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),220,	0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
+		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),220,	0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
 		for(int j=0;j<menu3_size;j++)
 		{
 			if (j<menu3_size-2) posy=posy+sizeFont+4;
@@ -564,33 +611,31 @@ s32 draw_menu(NoRSX *Graphics, int menu_id, int selected,int choosed, int menu1_
 			if (j==choosed) menu_color=COLOR_RED;
 			else if (j==selected) menu_color=COLOR_YELLOW;
 			else menu_color=COLOR_WHITE;
-			F2.Printf(center_text_x(Graphics, sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
+			F2.Printf(center_text_x(sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
 		}
 	}
-	F2.Printf(center_text_x(Graphics, sizeFont, "Firmware: X.XX (CEX)"),Graphics->height-(sizeFont+20+(sizeFont-5)+10),0xc0c0c0,sizeFont, "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
-	F2.Printf(center_text_x(Graphics, sizeFont-5, "Installer created by XMBM+ Team"),Graphics->height-((sizeFont-5)+10),0xd38900,sizeFont-5,     "Installer created by XMBM+ Team");
+	F2.Printf(center_text_x(sizeFont, "Firmware: X.XX (CEX)"),Graphics->height-(sizeFont+20+(sizeFont-5)+10),0xc0c0c0,sizeFont, "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
+	F2.Printf(center_text_x(sizeFont-5, "Installer created by XMBM+ Team"),Graphics->height-((sizeFont-5)+10),0xd38900,sizeFont-5,     "Installer created by XMBM+ Team");
 	
 	Graphics->Flip();
-
-	return 0;
+	if (menu_color==COLOR_RED) sleep(0.02);
 }
 
-int restore(NoRSX *Graphics, std::string foldername)
+int restore(std::string foldername)
 {
-	MsgDialog Mess(Graphics);
 	std::string ret="";
 	std::string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	
-	Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+foldername+" backup?"+problems).c_str());
+	Mess.Dialog(MSG_YESNO_DYES,("Are you sure you want to restore "+foldername+" backup?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=doit(Graphics,"restore", foldername, "", "");
+		ret=doit("restore", foldername, "", "");
 		if (ret == "") //restore success
 		{
 			if (is_dev_blind_mounted()==0)
 			{
 				unmount_dev_blind();
-				Mess.Dialog(MSG_YESNO, ("Backup "+foldername+" has restored with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
+				Mess.Dialog(MSG_YESNO_DYES, ("Backup "+foldername+" has restored with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
 				if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1) return 2;
 				else return 1;
 			}
@@ -606,26 +651,25 @@ int restore(NoRSX *Graphics, std::string foldername)
 	return 0;
 }
 
-int install(NoRSX *Graphics, std::string firmware_choice, std::string app_choice)
+int install(std::string firmware_choice, std::string app_choice)
 {
-	MsgDialog Mess(Graphics);
 	std::string ret="";
 	std::string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	std::string foldername=currentDateTime()+" Before "+app_choice;
 
-	Mess.Dialog(MSG_YESNO,("Are you sure you want to install "+app_choice+"?"+problems).c_str());
+	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to install "+app_choice+"?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=doit(Graphics,"backup", foldername, firmware_choice, app_choice);
+		ret=doit("backup", foldername, firmware_choice, app_choice);
 		if (ret == "") //backup success
 		{
-			ret=doit(Graphics,"install", "", firmware_choice, app_choice);
+			ret=doit("install", "", firmware_choice, app_choice);
 			if (ret == "") //copy success
 			{
 				if (is_dev_blind_mounted()==0)
 				{
 					unmount_dev_blind();
-					Mess.Dialog(MSG_YESNO, (app_choice+" has installed with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
+					Mess.Dialog(MSG_YESNO_DYES, (app_choice+" has installed with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
 					if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1) return 2;
 					else return 1;
 				}
@@ -635,29 +679,28 @@ int install(NoRSX *Graphics, std::string firmware_choice, std::string app_choice
 			else //problem in the copy process so rollback by restoring the backup
 			{
 				Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while copying files!\n\nError: "+ret+"\n\nBackup will be restored.").c_str());
-				return restore(Graphics, foldername);
+				return restore(foldername);
 			}
 		}
 		else //problem in the backup process so rollback by deleting the backup
 		{
 			Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while doing backuping the files!\n\nError: "+ret+"\n\nIncomplete backup will be deleted.").c_str());
-			if (recursiveDelete(Graphics, mainfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
+			if (recursiveDelete(mainfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
 		}
 	}
 
 	return 0;
 }
 
-int delete_all(NoRSX *Graphics)
+int delete_all()
 {
-	MsgDialog Mess(Graphics);
 	std::string ret="";
 	std::string problems="\n\nPlease DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.";
 
-	Mess.Dialog(MSG_YESNO,("Are you sure you want to delete all backups?"+problems).c_str());
+	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to delete all backups?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=recursiveDelete(Graphics, mainfolder+"/backups");
+		ret=recursiveDelete(mainfolder+"/backups");
 		if (ret == "") //delete sucess
 		{
 			Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
@@ -671,13 +714,12 @@ int delete_all(NoRSX *Graphics)
 	return 0;
 }
 
-int show_terms(NoRSX *Graphics)
+int show_terms()
 {
-	MsgDialog Mess(Graphics);
 	if (exists((mainfolder+"/terms-accepted.cfg").c_str())!=1)//terms not yet accepted
 	{
 		Mess.Dialog(MSG_OK,"Permission is hereby granted, FREE of charge, to any person obtaining a copy of this software and associated configuration files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, publish, distribute, sublicense, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.");
-		Mess.Dialog(MSG_YESNO,"THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\nDo you accept this terms?");
+		Mess.Dialog(MSG_YESNO_DYES,"THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\nDo you accept this terms?");
 		if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 		{
 			create_file((mainfolder+"/terms-accepted.cfg").c_str());
@@ -688,7 +730,7 @@ int show_terms(NoRSX *Graphics)
 	return 1;
 }
 
-s32 main(s32 argc, char* argv[])
+int main(s32 argc, char* argv[])
 {
 	//this is the structure for the pad controllers
 	padInfo padinfo;
@@ -727,10 +769,6 @@ s32 main(s32 argc, char* argv[])
 
 	//this will initialize the controller (7= seven controllers)
 	ioPadInit (7);
-	//this will initialize NoRSX..
-	NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
-	//NoRSX *Graphics = new NoRSX();
-	MsgDialog Mess(Graphics);
 
 	//Get main folder
 	pch = strtok (argv[0],"/");
@@ -746,13 +784,13 @@ s32 main(s32 argc, char* argv[])
 	}
 
 	//Show terms and conditions
-	if (show_terms(Graphics)!=1) goto end;
+	if (show_terms()!=1) goto end;
 
 	//DETECT FIRMWARE CHANGES WERE
 	if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")!=1 && exists((mainfolder+"/backups").c_str())==1)
 	{
 		Mess.Dialog(MSG_OK,"The system detected a firmware change. All previous backups will be deleted.");
-		ret=recursiveDelete(Graphics, mainfolder+"/backups");
+		ret=recursiveDelete(mainfolder+"/backups");
 		if (ret == "") Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
 		else Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
 	}
@@ -790,7 +828,6 @@ s32 main(s32 argc, char* argv[])
 				{
 					if (strcmp(dirp2->d_name, fw_version.c_str())==0 || strcmp(dirp2->d_name, "All")==0)
 					{
-						//debug_print(Graphics, (std::string)dirp->d_name+" "+(std::string)dirp2->d_name+" "+fw_version);
 						ifw=0;
 						direct3=direct2+"/"+dirp2->d_name;
 						dp3 = opendir (direct3.c_str());
@@ -837,6 +874,7 @@ s32 main(s32 argc, char* argv[])
 		goto end;
 	}
 
+	Graphics->AppStart();
 	//Start menu
 	menu1_position=0;
 	
@@ -847,8 +885,8 @@ s32 main(s32 argc, char* argv[])
 		if (menu1_position==menu1_size-2) menu1_position--;
 	}
 	else menu1_restore=1;
-	draw_menu(Graphics,1,menu1_position,-1,0);
-	while (1)
+	draw_menu(1,menu1_position,-1,0);
+	while (Graphics->GetAppStatus())
 	{
 		ioPadGetInfo (&padinfo);
 		//this will wait for a START from any pad
@@ -880,14 +918,13 @@ s32 main(s32 argc, char* argv[])
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,1,-1,menu1_position,0);
-					sleep(0.05);
+					draw_menu(1,-1,menu1_position,0);
 					if (menu1_position<menu1_size-2)
 					{
 						app_choice=menu1[menu1_position];
 						if (menu2[menu1_position][0]=="All Firmwares" && menu2_size[menu1_position]==2)
 						{
-							if (install(Graphics, menu2[menu1_position][0], app_choice)==2) goto end_with_reboot;
+							if (install(menu2[menu1_position][0], app_choice)==2) goto end_with_reboot;
 							else goto menu_1;
 						}
 						else goto continue_to_menu2;
@@ -903,7 +940,7 @@ s32 main(s32 argc, char* argv[])
 	continue_to_menu2:
 	menu2_position=0;
 	menu_2:
-	draw_menu(Graphics,2,menu2_position,-1,menu1_position);
+	draw_menu(2,menu2_position,-1,menu1_position);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -929,11 +966,10 @@ s32 main(s32 argc, char* argv[])
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,2,-1,menu2_position,menu1_position);
-					sleep(0.05);
+					draw_menu(2,-1,menu2_position,menu1_position);
 					if (menu2_position<menu2_size[menu1_position]-1)
 					{
-						if (install(Graphics, menu2[menu1_position][menu2_position], app_choice)==2) goto end_with_reboot;
+						if (install(menu2[menu1_position][menu2_position], app_choice)==2) goto end_with_reboot;
 						else goto menu_2;
 					}
 					else goto menu_1;
@@ -963,7 +999,7 @@ s32 main(s32 argc, char* argv[])
 	menu3_size++;
 	menu3_position=0;
 	menu_3:
-	draw_menu(Graphics,3,menu3_position,-1,0);
+	draw_menu(3,menu3_position,-1,0);
 	while (1)
 	{
 		ioPadGetInfo (&padinfo);
@@ -989,16 +1025,15 @@ s32 main(s32 argc, char* argv[])
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(Graphics,3,-1,menu3_position,0);
-					sleep(0.05);
+					draw_menu(3,-1,menu3_position,0);
 					if (menu3_position<menu3_size-2) //Restore a backup
 					{
-						if (restore(Graphics, menu3[menu3_position])==2) goto end_with_reboot;
+						if (restore(menu3[menu3_position])==2) goto end_with_reboot;
 						else goto menu_3;
 					}
 					else if (menu3_position<menu3_size-1) //Delete all backups
 					{
-						if (delete_all(Graphics)==1) goto menu_1;
+						if (delete_all()==1) goto menu_1;
 						else goto menu_3;
 					}
 					else goto menu_1;
@@ -1009,20 +1044,18 @@ s32 main(s32 argc, char* argv[])
 
 	end_with_reboot:
 	{
+		Graphics->AppExit();
 		if (is_dev_blind_mounted()==0) unmount_dev_blind();
-		//This will uninit the NoRSX lib
-		Graphics->NoRSX_Exit();
-		//this will uninitialize the controllers
-		ioPadEnd();
+		Graphics->NoRSX_Exit(); //This will uninit the NoRSX lib
+		ioPadEnd(); //this will uninitialize the controllers
 		reboot_sys(); //reboot
 	}
 
 	end:
 	{
+		Graphics->AppExit();
 		if (is_dev_blind_mounted()==0) unmount_dev_blind();
-		//This will uninit the NoRSX lib
 		Graphics->NoRSX_Exit();
-		//this will uninitialize the controllers
 		ioPadEnd();
 	}
 	return 0;
