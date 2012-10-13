@@ -104,62 +104,44 @@ void debug_print(NoRSX *Graphics, std::string text)
 	sleep(10);
 }
 
-double get_free_space(const char *path, std::string format)
+std::string convert_size(double size, std::string format)
 {
-	double free_disk_space;
+
+	char str[100];
+
+	if (format=="auto")
+	{
+		if (size >= 1073741824) format="GB";
+		else if (size >= 1048576) format="MB";
+		else format="KB";
+	}
+	if (format=="KB") size = size / 1024.00; // convert to KB
+	else if (format=="MB") size = size / 1048576.00; // convert to MB
+	else if (format=="GB") size = size / 1073741824.00; // convert to GB
+	if (format=="KB") sprintf(str, "%.2fKB", size);
+	else if (format=="MB") sprintf(str, "%.2fMB", size);
+	else if (format=="GB") sprintf(str, "%.2fGB", size);
+
+	return str;
+}
+
+double get_free_space(const char *path)
+{
 	uint32_t block_size;
 	uint64_t free_block_count;
 
 	sysFsGetFreeSize(path, &block_size, &free_block_count);
-	free_disk_space = (((uint64_t) block_size * free_block_count));
-	if (format=="KB") free_disk_space = free_disk_space / 1024.00; // convert to KB
-	if (format=="MB") free_disk_space = free_disk_space / 1048576.00; // convert to MB
-	if (format=="GB") free_disk_space = free_disk_space / 1073741824.00; // convert to GB
-	
-	return free_disk_space;
+	return (((uint64_t) block_size * free_block_count));
 }
 
-double get_filesize(const char *path, std::string format)
+double get_filesize(const char *path)
 {
 	sysFSStat info;
-	double filesize;
 
-	if (sysFsStat(path, &info) >= 0)
-	{
-		filesize=(double)info.st_size;
-		if (format=="KB") filesize = filesize / 1024.00; // convert to KB
-		if (format=="MB") filesize = filesize / 1048576.00; // convert to MB
-		if (format=="GB") filesize = filesize / 1073741824.00; // convert to GB
-		return filesize;
-	}
+	if (sysFsStat(path, &info) >= 0) return (double)info.st_size;
 	else return 0;
 }
 
-std::string copy_file(const char* cfrom, const char* ctoo)
-{
-  FILE *from, *to;
-  char ch;
-
-  /* open source file */
-  if ((from = fopen(cfrom, "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
-
-  /* open destination file */
-  if((to = fopen(ctoo, "wb"))==NULL) return "Cannot open destination file ("+(std::string)ctoo+") for writing!";
-
-  /* copy the file */
-  while(!feof(from)) {
-    ch = fgetc(from);
-    if(ferror(from))  return "Error reading source file ("+(std::string)cfrom+")!";
-    if(!feof(from)) fputc(ch, to);
-    if(ferror(to))  return "Error writing destination file ("+(std::string)ctoo+")!";
-  }
-
-  if(fclose(from)==EOF) return "Cannot close source file ("+(std::string)cfrom+")!";
-
-  if(fclose(to)==EOF) return "Cannot close destination file ("+(std::string)ctoo+")!";
-
-  return "";
-}
 
 std::string create_file(const char* cpath)
 {
@@ -256,23 +238,98 @@ s32 center_text_x(NoRSX *Graphics, int fsize, const char* message)
 	return (Graphics->width-(strlen(message)*fsize/2))/2;
 }
 
-s32 draw_copy(NoRSX *Graphics, std::string title, std::string from, std::string to)
+std::string int_to_string(int number)
+{
+	if (number == 0) return "0";
+	std::string temp="";
+	std::string returnvalue="";
+	while (number>0)
+	{
+		temp+=number%10+48;
+		number/=10;
+	}
+	for (size_t i=0;i<temp.length();i++)
+		returnvalue+=temp[temp.length()-i-1];
+	
+	return returnvalue;
+}
+
+std::string compare_files(std::string cfrom, std::string ctoo)
+{
+	FILE *fp1, *fp2;
+	char ch1, ch2;
+
+	if ((fp1 = fopen(cfrom.c_str(), "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
+	if ((fp2 = fopen(ctoo.c_str(), "rb"))==NULL) return "Cannot open destination file ("+(std::string)ctoo+") for reading!";
+	while(!feof(fp1))
+	{
+		ch1 = fgetc(fp1);
+		if(ferror(fp1))  return "Error reading source file ("+(std::string)cfrom+")!";
+		ch2 = fgetc(fp2);
+		if (ferror(fp2)) return "Error reading destination file ("+(std::string)ctoo+")!";
+		if (ch1 != ch2) return "Source and destination files are different!";
+	}
+	if (fclose(fp1)==EOF) return "Cannot close source file ("+(std::string)cfrom+")!";
+	if (fclose(fp2)==EOF) return "Cannot close destination file ("+(std::string)ctoo+")!";
+
+	return "";
+}
+
+void draw_copy(NoRSX *Graphics, std::string title, const char *dirfrom, const char *dirto, const char *filename, std::string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
 {
 	int sizeTitleFont = 30;
 	int sizeFont = 18;
+	std::string current;
 	Font F1(LATIN2, Graphics);
 	Font F2(LATIN2, Graphics);
 	Background B1(Graphics);
-	B1.Mono(COLOR_BLACK);
-	//Object R1(Graphics);
-	//R1.Rectangle(0, 200, Graphics->width, 200, COLOR_BLACK);
-	F1.Printf(center_text_x(Graphics, sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
-	F2.Printf(center_text_x(Graphics, sizeFont, ("From: "+from).c_str()),260,COLOR_WHITE,sizeFont, "%s",("From: "+from).c_str());
-	F2.Printf(center_text_x(Graphics, sizeFont, ("To: "+to).c_str()),290,COLOR_WHITE,sizeFont, "%s",("To: "+to).c_str());
-	
-	Graphics->Flip();
 
-	return 0;
+	B1.Mono(COLOR_BLACK);
+	F1.Printf(center_text_x(Graphics, sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
+	F2.Printf(100, 260, COLOR_WHITE, sizeFont, "Filename: %s", ((std::string)filename+" ("+convert_size(get_filesize(cfrom.c_str()), "auto").c_str()+")").c_str());
+	F2.Printf(100, 320, COLOR_WHITE, sizeFont, "From: %s", dirfrom);
+	F2.Printf(100, 350, COLOR_WHITE, sizeFont, "To: %s", dirto);
+	current=convert_size(copy_currentsize+(double)countsize, "auto")+" of "+convert_size(copy_totalsize, "auto").c_str()+" copied ("+int_to_string(numfiles_current).c_str()+" of "+int_to_string(numfiles_total).c_str()+" files)";
+	F2.Printf(center_text_x(Graphics, sizeTitleFont, current.c_str()), 410, COLOR_WHITE, sizeFont, "%s", current.c_str());
+	Graphics->Flip();
+}
+
+std::string copy_file(NoRSX *Graphics, std::string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total)
+{
+	std::string cfrom=(std::string)dirfrom+(std::string)filename;
+	std::string ctoo=(std::string)dirto+(std::string)filename;
+	FILE *from, *to;
+	char buf[8192]; // BUFSIZE default is 8192 bytes
+	size_t size;
+	size_t countsize=0;
+	time_t start, now;
+
+	if ((from = fopen(cfrom.c_str(), "rb"))==NULL) return "Cannot open source file ("+(std::string)cfrom+") for reading!";
+	if((to = fopen(ctoo.c_str(), "wb"))==NULL) return "Cannot open destination file ("+(std::string)ctoo+") for writing!";
+	draw_copy(Graphics, title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
+	start = time(NULL);
+	time(&start);
+	while(!feof(from))
+	{
+		size = fread(buf, 1, 8192, from);
+		if(ferror(from))  return "Error reading source file ("+(std::string)cfrom+")!";
+		fwrite(buf, 1, size, to);
+		if (ferror(to)) return "Error writing destination file ("+(std::string)ctoo+")!";
+		countsize=countsize+size;
+		now = time(NULL);
+		time(&now);
+		if (difftime(now,start)>=0.5)
+		{
+			draw_copy(Graphics, title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
+			start = time(NULL);
+			time(&start);
+		}
+	}
+
+	if (fclose(from)==EOF) return "Cannot close source file ("+(std::string)cfrom+")!";
+	if (fclose(to)==EOF) return "Cannot close destination file ("+(std::string)ctoo+")!";
+
+	return compare_files(cfrom, ctoo);
 }
 
 bool replace(std::string& str, const std::string& from, const std::string& to) {
@@ -288,8 +345,8 @@ std::string correct_path(std::string dpath, int what)
 	std::string cpath;
 
 	cpath=dpath;
-	if (what==1 || what==2) replace(cpath.begin(), cpath.end(), '~', '/');
 	if (what==1 || what==2) if (cpath.find("PS3~")!=std::string::npos) cpath.replace( cpath.find("PS3~"), 4, "");
+	if (what==1 || what==2) replace(cpath.begin(), cpath.end(), '~', '/');
 	if (what==2) if (cpath.find("dev_flash")!=std::string::npos) cpath.replace( cpath.find("dev_flash"), 9, "dev_blind");
 
 	return "/"+cpath;
@@ -309,9 +366,15 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string foldername,
 	int findex=0;
 	int mountblind=0;
 	int dirnotfound=0;
+	double copy_totalsize=0;
+	double copy_currentsize=0;
+	double source_size=0;
+	double dest_size=0;
+	double freespace_size=0;
+	int numfiles_total=0;
+	int numfiles_current=0;
+	int j=0;
 	std::string ret="";
-	std::string ret2="";
-	MsgDialog Messa(Graphics);
 
 	if (operation=="backup")
 	{
@@ -385,7 +448,28 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string foldername,
 	}
 
 	//copy files
-	for(int j=0;j<findex;j++)
+	for(j=0;j<findex;j++)
+	{
+		if (operation=="backup") check_path=check_paths[j];
+		else check_path=source_paths[j];
+		dp = opendir (check_path.c_str());
+		if (dp == NULL) return "Cannot open directory "+check_path;
+		while ( (dirp = readdir(dp) ) )
+		{
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+			{
+				sourcefile=source_paths[j]+"/"+dirp->d_name;
+				if (!(operation=="backup" && exists(sourcefile.c_str())==0))
+				{
+					copy_totalsize+=get_filesize(sourcefile.c_str());
+					numfiles_total+=1;
+				}
+			}
+		}
+		closedir(dp);
+	}
+
+	for(j=0;j<findex;j++)
 	{
 		if (operation=="backup") check_path=check_paths[j];
 		else check_path=source_paths[j];
@@ -399,26 +483,20 @@ std::string doit(NoRSX *Graphics, std::string operation, std::string foldername,
 				destfile=dest_paths[j]+"/"+dirp->d_name;
 				if (!(operation=="backup" && exists(sourcefile.c_str())==0))
 				{
-					//Disk space check
-					if (get_filesize(sourcefile.c_str(),"") >= get_free_space(destfile.c_str(),"")) ret="Not enough space to copy the file ("+(std::string)dirp->d_name+") to destination path ("+dest_paths[j].c_str()+").";
-					else
-					{
-						draw_copy(Graphics, title, sourcefile, destfile);
-						//sleep(4);
-						ret=copy_file(sourcefile.c_str(), destfile.c_str());
-					}
-					//source and dest file compare [TODO] 
-					//simulate errors
-					//if (operation=="backup" && strcmp(dirp->d_name, "explore_plugin_full.rco")!=0) ret="simulate backup error";
-					//if (operation=="install" && strcmp(dirp->d_name, "explore_plugin_full.rco")!=0) ret="simulate install error";
-					//if (operation=="restore" && strcmp(dirp->d_name, "explore_plugin_full.rco")!=0) ret="simulate restore error";
+					source_size=get_filesize(sourcefile.c_str());
+					dest_size=get_filesize(destfile.c_str());
+					freespace_size=get_free_space(dest_paths[j].c_str())+dest_size;
+					//Disk space check 
+					if (source_size >= freespace_size) ret="Not enough space to copy the file ("+(std::string)dirp->d_name+") to destination path ("+dest_paths[j].c_str()+").";
+					else ret=copy_file(Graphics, title, (source_paths[j]+"/").c_str(), (dest_paths[j]+"/").c_str(), dirp->d_name, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total);
 					if (ret != "") return ret;
+					copy_currentsize+=source_size;
+					numfiles_current+=1;
 				}
 			}
 		}
 		closedir(dp);
 	}
-
 	return "";
 }
 
@@ -501,7 +579,7 @@ int restore(NoRSX *Graphics, std::string foldername)
 {
 	MsgDialog Mess(Graphics);
 	std::string ret="";
-	std::string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	std::string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	
 	Mess.Dialog(MSG_YESNO,("Are you sure you want to restore "+foldername+" backup?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
@@ -511,9 +589,10 @@ int restore(NoRSX *Graphics, std::string foldername)
 		{
 			if (is_dev_blind_mounted()==0)
 			{
-				Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to reboot.").c_str());
 				unmount_dev_blind();
-				return 2;
+				Mess.Dialog(MSG_YESNO, ("Backup "+foldername+" has restored with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
+				if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1) return 2;
+				else return 1;
 			}
 			Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to continue.").c_str());
 			return 1;
@@ -545,9 +624,10 @@ int install(NoRSX *Graphics, std::string firmware_choice, std::string app_choice
 			{
 				if (is_dev_blind_mounted()==0)
 				{
-					Mess.Dialog(MSG_OK, (app_choice+" has installed with success.\nPress OK to reboot.").c_str());
 					unmount_dev_blind();
-					return 2;
+					Mess.Dialog(MSG_YESNO, (app_choice+" has installed with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
+					if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1) return 2;
+					else return 1;
 				}
 				Mess.Dialog(MSG_OK,(app_choice+" has installed with success.\nPress OK to continue.").c_str());
 				return 1;
