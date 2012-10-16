@@ -368,8 +368,8 @@ string z_inflate(FILE *source, FILE *dest)
 
 void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
 {
-	int sizeTitleFont = 30;
-	int sizeFont = 18;
+	int sizeTitleFont = 40;
+	int sizeFont = 25;
 	string current;
 
 	B1.Mono(COLOR_BLACK);
@@ -712,8 +712,8 @@ void draw_menu(int menu_id, int selected,int choosed, int menu1_position)
 	u32 imgX =(Graphics->width/2)-(png.width/2), imgY = 30;
 	//Now you loaded the png into memory. you need to display it: This will draw the image at x = 200 and y = 300 on the buffer.
 	I1.AlphaDrawIMG(imgX,imgY,&png);
-	int sizeTitleFont = 30;
-	int sizeFont = 25;
+	int sizeTitleFont = 40;
+	int sizeFont = 30;
 	int menu_color=COLOR_WHITE;
 	string menu1_text;
 
