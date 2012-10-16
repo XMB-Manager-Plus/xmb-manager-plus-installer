@@ -27,6 +27,7 @@ string menu1[99];
 int menu1_size=0;
 int menu1_restore=1;
 string menu2[99][99];
+string menu2_path[99][99];
 int menu2_size[99];
 string menu3[99];
 int menu3_size=0;
@@ -502,7 +503,7 @@ string *recursiveListing(string direct)
 }
 
 
-string doit(string operation, string foldername, string fw, string app)
+string doit(string operation, string foldername, string fw_folder, string app)
 {
 	DIR *dp;
 	struct dirent *dirp;
@@ -537,7 +538,7 @@ string doit(string operation, string foldername, string fw, string app)
 	{
 		//create_dir(mainfolder+"/backups");
 		//create_dir(mainfolder+"/backups/" + foldername);
-		check_path=mainfolder+"/apps/"+app+"/"+fw_version+"/"+fw;
+		check_path=mainfolder+"/apps/"+app+"/"+fw_folder;
 		dp = opendir (check_path.c_str());
 		if (dp == NULL) return "Cannot open directory "+check_path;
 		while ( (dirp = readdir(dp) ) )
@@ -583,7 +584,7 @@ string doit(string operation, string foldername, string fw, string app)
 	}
 	else if (operation=="install")
 	{
-		check_path=mainfolder+"/apps/"+app+"/"+fw_version+"/"+fw;
+		check_path=mainfolder+"/apps/"+app+"/"+fw_folder;
 		dp = opendir (check_path.c_str());
 		if (dp == NULL) return "Cannot open directory "+check_path;
 		while ( (dirp = readdir(dp) ) )
@@ -772,7 +773,7 @@ int restore(string foldername)
 	string ret="";
 	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	
-	Mess.Dialog(MSG_YESNO_DYES,("Are you sure you want to restore "+foldername+" backup?"+problems).c_str());
+	Mess.Dialog(MSG_YESNO_DYES,("Are you sure you want to restore '"+foldername+"' backup?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
 		ret=doit("restore", foldername, "", "");
@@ -781,56 +782,56 @@ int restore(string foldername)
 			if (is_dev_blind_mounted()==0)
 			{
 				unmount_dev_blind();
-				Mess.Dialog(MSG_YESNO_DYES, ("Backup "+foldername+" has restored with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
+				Mess.Dialog(MSG_YESNO_DYES, ("Backup '"+foldername+"' has restored with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
 				if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1) return 2;
 				else return 1;
 			}
-			Mess.Dialog(MSG_OK,("Backup "+foldername+" has restored with success.\nPress OK to continue.").c_str());
+			Mess.Dialog(MSG_OK,("Backup '"+foldername+"' has restored with success.\nPress OK to continue.").c_str());
 			return 1;
 		}
 		else //problem in the restore process so emit a warning
 		{
-			Mess.Dialog(MSG_ERROR,("Backup "+foldername+" has not restored! A error occured while restoring the backup!\n\nError: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
+			Mess.Dialog(MSG_ERROR,("Backup '"+foldername+"' has not restored! A error occured while restoring the backup!\n\nError: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
 		}
 	}
 
 	return 0;
 }
 
-int install(string firmware_choice, string app_choice)
+int install(string firmware_folder, string app_choice)
 {
 	string ret="";
 	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	string foldername=currentDateTime()+" Before "+app_choice;
 
-	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to install "+app_choice+"?"+problems).c_str());
+	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to install '"+app_choice+"'?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=doit("backup", foldername, firmware_choice, app_choice);
+		ret=doit("backup", foldername, firmware_folder, app_choice);
 		if (ret == "") //backup success
 		{
-			ret=doit("install", "", firmware_choice, app_choice);
+			ret=doit("install", "", firmware_folder, app_choice);
 			if (ret == "") //copy success
 			{
 				if (is_dev_blind_mounted()==0)
 				{
 					unmount_dev_blind();
-					Mess.Dialog(MSG_YESNO_DYES, (app_choice+" has installed with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
+					Mess.Dialog(MSG_YESNO_DYES, ("'"+app_choice+"' has installed with success.\nYou have changed /dev_flash files, do you want to reboot?").c_str());
 					if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1) return 2;
 					else return 1;
 				}
-				Mess.Dialog(MSG_OK,(app_choice+" has installed with success.\nPress OK to continue.").c_str());
+				Mess.Dialog(MSG_OK,("'"+app_choice+"' has installed with success.\nPress OK to continue.").c_str());
 				return 1;
 			}
 			else //problem in the copy process so rollback by restoring the backup
 			{
-				Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while copying files!\n\nError: "+ret+"\n\nBackup will be restored.").c_str());
+				Mess.Dialog(MSG_ERROR,("'"+app_choice+"' has not installed! A error occured while copying files!\n\nError: "+ret+"\n\nBackup will be restored.").c_str());
 				return restore(foldername);
 			}
 		}
 		else //problem in the backup process so rollback by deleting the backup
 		{
-			Mess.Dialog(MSG_ERROR,(app_choice+" has not installed! A error occured while doing backuping the files!\n\nError: "+ret+"\n\nIncomplete backup will be deleted.").c_str());
+			Mess.Dialog(MSG_ERROR,("'"+app_choice+"' has not installed! A error occured while doing backuping the files!\n\nError: "+ret+"\n\nIncomplete backup will be deleted.").c_str());
 			if (recursiveDelete(mainfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
 		}
 	}
@@ -872,7 +873,7 @@ int delete_one(string foldername, string type)
 		else if (strcmp(type.c_str(), "app")==0) ret=recursiveDelete(mainfolder+"/apps/"+foldername);
 		if (ret == "") //delete sucess
 		{
-			Mess.Dialog(MSG_OK,(type+" '"+foldername+"' has been deleted!\nPress OK to continue.").c_str());
+			Mess.Dialog(MSG_OK,("The "+type+" '"+foldername+"' has been deleted!\nPress OK to continue.").c_str());
 			return 1;
 		}
 		else //problem in the delete process so emit a warning
@@ -904,25 +905,18 @@ int main(s32 argc, char* argv[])
 	//this is the structure for the pad controllers
 	padInfo padinfo;
 	padData paddata;
-
 	string firmware_choice;
 	string app_choice;
 	string direct;
 	string direct2;
-	string direct3;
 	DIR *dp;
 	DIR *dp2;
-	DIR *dp3;
 	struct dirent *dirp;
 	struct dirent *dirp2;
-	struct dirent *dirp3;
-
 	int mcount=0;
 	char * pch;
 	string ps3loadtid="PS3LOAD00";
-
 	int i;
-	int ifwv=0;
 	int ifw=0;
 	int iapp=0;
 	string ret="";
@@ -990,7 +984,7 @@ int main(s32 argc, char* argv[])
 		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
 		{
 			//second menu
-			ifwv=0;
+			ifw=0;
 			direct2=direct+"/"+dirp->d_name;
 			dp2 = opendir (direct2.c_str());
 			if (dp2 == NULL) return 0;
@@ -998,40 +992,32 @@ int main(s32 argc, char* argv[])
 			{
 				if ( strcmp(dirp2->d_name, ".") != 0 && strcmp(dirp2->d_name, "..") != 0 && strcmp(dirp2->d_name, "") != 0 && dirp2->d_type == DT_DIR)
 				{
-					if (strcmp(dirp2->d_name, fw_version.c_str())==0 || strcmp(dirp2->d_name, "All")==0)
+					string fwfolder=(string)dirp2->d_name;
+					string app_fwv=fwfolder.substr(0,fwfolder.find("-"));
+					string app_fwt=fwfolder.substr(app_fwv.size()+1,fwfolder.rfind("-")-app_fwv.size()-1);
+					string app_fwc=fwfolder.substr(app_fwv.size()+1+app_fwt.size()+1);
+					//Mess.Dialog(MSG_OK,(app_fwv+"|"+app_fwt+"|"+app_fwc).c_str());
+					if ((strcmp(app_fwv.c_str(), fw_version.c_str())==0 || strcmp(app_fwv.c_str(), "All")==0) && (strcmp(app_fwt.c_str(), ttype.c_str())==0 || strcmp(app_fwt.c_str(), "All")==0))
 					{
-						ifw=0;
-						direct3=direct2+"/"+dirp2->d_name;
-						dp3 = opendir (direct3.c_str());
-						if (dp3 == NULL) return 0;
-						while ( (dirp3 = readdir(dp3) ) )
-						{
-							if ( strcmp(dirp3->d_name, ".") != 0 && strcmp(dirp3->d_name, "..") != 0 && strcmp(dirp3->d_name, "") != 0 && dirp3->d_type == DT_DIR)
-							{
-								menu2[iapp][ifw]=dirp3->d_name;
-								ifw++;
-							}
-						}
-						closedir(dp3);
-						if (ifw!=0) //has apps for the current firmware
-						{
-							menu2[iapp][ifw]="Back to main menu";
-							ifw++;
-							menu2_size[iapp]= ifw;
-						}
-						ifwv++;
+						menu2[iapp][ifw]=app_fwc;
+						menu2_path[iapp][ifw]=dirp2->d_name;
+						ifw++;
 					}
 				}
 			}
 			closedir(dp2);
-			if (ifwv!=0) //has apps for the current firmware version
+			if (ifw!=0) //has apps for the current firmware version
 			{
+				menu2[iapp][ifw]="Back to main menu";
+				ifw++;
+				menu2_size[iapp]=ifw;
 				menu1[iapp]=dirp->d_name;
 				iapp++;
 			}
 		}
 	}
 	closedir(dp);
+
 	if (iapp!=0)
 	{
 		menu1[iapp]="RESTORE a backup";
@@ -1093,9 +1079,9 @@ int main(s32 argc, char* argv[])
 					if (menu1_position<menu1_size-2)
 					{
 						app_choice=menu1[menu1_position];
-						if (menu2[menu1_position][0]=="All Firmwares" && menu2_size[menu1_position]==2)
+						if (menu2[menu1_position][0]=="All" && menu2_size[menu1_position]==2)
 						{
-							if (install(menu2[menu1_position][0], app_choice)==2) goto end_with_reboot;
+							if (install(menu2_path[menu1_position][0], app_choice)==2) goto end_with_reboot;
 							else goto menu_1;
 						}
 						else goto continue_to_menu2;
@@ -1149,7 +1135,7 @@ int main(s32 argc, char* argv[])
 					draw_menu(2,-1,menu2_position,menu1_position);
 					if (menu2_position<menu2_size[menu1_position]-1)
 					{
-						if (install(menu2[menu1_position][menu2_position], app_choice)==2) goto end_with_reboot;
+						if (install(menu2_path[menu1_position][menu2_position], app_choice)==2) goto end_with_reboot;
 						else goto menu_2;
 					}
 					else goto menu_1;
