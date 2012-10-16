@@ -30,7 +30,7 @@ string menu2[99][99];
 int menu2_size[99];
 string menu3[99];
 int menu3_size=0;
-NoRSX *Graphics = new NoRSX(RESOLUTION_1280x720);
+NoRSX *Graphics = new NoRSX(RESOLUTION_1920x1080);
 Background B1(Graphics);
 Font F1(LATIN2, Graphics);
 Font F2(LATIN2, Graphics);
@@ -65,11 +65,13 @@ void draw_copy(string title, const char *dirfrom, const char *dirto, const char 
 string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag);
 bool replace(string& str, const string& from, const string& to);
 string correct_path(string dpath, int what);
+string *recursiveListing(string direct);
 string doit(string operation, string foldername, string fw, string app);
 void draw_menu(int menu_id, int selected,int choosed, int menu1_position);
 int restore(string foldername);
 int install(string firmware_choice, string app_choice);
 int delete_all();
+int delete_one(string foldername, string type);
 int show_terms();
 int main(s32 argc, char* argv[]);
 
@@ -858,6 +860,29 @@ int delete_all()
 	return 0;
 }
 
+int delete_one(string foldername, string type)
+{
+	string ret="";
+	string problems="\n\nPlease DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.";
+
+	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to delete the "+type+" '"+foldername+"'?"+problems).c_str());
+	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
+	{
+		if (strcmp(type.c_str(), "backup")==0) ret=recursiveDelete(mainfolder+"/backups/"+foldername);
+		else if (strcmp(type.c_str(), "app")==0) ret=recursiveDelete(mainfolder+"/apps/"+foldername);
+		if (ret == "") //delete sucess
+		{
+			Mess.Dialog(MSG_OK,(type+" '"+foldername+"' has been deleted!\nPress OK to continue.").c_str());
+			return 1;
+		}
+		else //problem in the delete process so emit a warning
+		{
+			Mess.Dialog(MSG_ERROR,("A error occured while deleting the "+type+" '"+foldername+"'!\n\nError: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
+		}
+	}
+	return 0;
+}
+
 int show_terms()
 {
 	if (exists((mainfolder+"/terms-accepted.cfg").c_str())!=1)//terms not yet accepted
@@ -952,6 +977,9 @@ int main(s32 argc, char* argv[])
 	else if (fw==0x30410) fw_version="3.41";
 	else if (fw==0x30150) fw_version="3.15";
 
+	Graphics->AppStart();
+
+	start:
 	//make menus arrays
 	iapp=0;
 	direct=mainfolder+"/apps";
@@ -959,7 +987,7 @@ int main(s32 argc, char* argv[])
 	if (dp == NULL) return 0;
 	while ( (dirp = readdir(dp) ) )
 	{
-		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
 		{
 			//second menu
 			ifwv=0;
@@ -968,7 +996,7 @@ int main(s32 argc, char* argv[])
 			if (dp2 == NULL) return 0;
 			while ( (dirp2 = readdir(dp2) ) )
 			{
-				if ( strcmp(dirp2->d_name, ".") != 0 && strcmp(dirp2->d_name, "..") != 0 && strcmp(dirp2->d_name, "") != 0)
+				if ( strcmp(dirp2->d_name, ".") != 0 && strcmp(dirp2->d_name, "..") != 0 && strcmp(dirp2->d_name, "") != 0 && dirp2->d_type == DT_DIR)
 				{
 					if (strcmp(dirp2->d_name, fw_version.c_str())==0 || strcmp(dirp2->d_name, "All")==0)
 					{
@@ -978,7 +1006,7 @@ int main(s32 argc, char* argv[])
 						if (dp3 == NULL) return 0;
 						while ( (dirp3 = readdir(dp3) ) )
 						{
-							if ( strcmp(dirp3->d_name, ".") != 0 && strcmp(dirp3->d_name, "..") != 0 && strcmp(dirp3->d_name, "") != 0)
+							if ( strcmp(dirp3->d_name, ".") != 0 && strcmp(dirp3->d_name, "..") != 0 && strcmp(dirp3->d_name, "") != 0 && dirp3->d_type == DT_DIR)
 							{
 								menu2[iapp][ifw]=dirp3->d_name;
 								ifw++;
@@ -1018,7 +1046,6 @@ int main(s32 argc, char* argv[])
 		goto end;
 	}
 
-	Graphics->AppStart();
 	//Start menu
 	menu1_position=0;
 	
@@ -1060,7 +1087,7 @@ int main(s32 argc, char* argv[])
 					else menu1_position=menu1_size-1;
 					goto menu_1;
 				}
-				if (paddata.BTN_CROSS)
+				if (paddata.BTN_CROSS) //Install an app
 				{
 					draw_menu(1,-1,menu1_position,0);
 					if (menu1_position<menu1_size-2)
@@ -1076,6 +1103,15 @@ int main(s32 argc, char* argv[])
 					else if (menu1_position<menu1_size-1) goto continue_to_menu3;
 					else if (menu1_position<menu1_size) goto end;
 					else goto menu_1;
+				}
+				if (paddata.BTN_SQUARE) //Delete an app
+				{
+					if (menu1_position<menu1_size-2)
+					{
+						draw_menu(1,-1,menu1_position,0);
+						if (delete_one(menu1[menu1_position], "app")==1) goto start;
+						else goto menu_1;
+					}
 				}
 			}
 		}
@@ -1130,7 +1166,7 @@ int main(s32 argc, char* argv[])
 	if (dp == NULL) return 0;
 	while ( (dirp = readdir(dp) ) )
 	{
-		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
+		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
 		{
 			menu3[menu3_size]=dirp->d_name;
 			menu3_size++;
@@ -1181,6 +1217,15 @@ int main(s32 argc, char* argv[])
 						else goto menu_3;
 					}
 					else goto menu_1;
+				}
+				if (paddata.BTN_SQUARE)
+				{
+					if (menu3_position<menu3_size-2) //Delete a backup
+					{
+						draw_menu(3,-1,menu3_position,0);
+						if (delete_one(menu3[menu3_position], "backup")==1) goto continue_to_menu3;
+						else goto menu_3;
+					}
 				}
 			}
 		}
