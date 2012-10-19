@@ -1,4 +1,21 @@
 #include "xmbmp-file.h"
+#include "xmbmp-graphics.h"
+
+string int_to_string(int number)
+{
+	if (number == 0) return "0";
+	string temp="";
+	string returnvalue="";
+	while (number>0)
+	{
+		temp+=number%10+48;
+		number/=10;
+	}
+	for (size_t i=0;i<temp.length();i++)
+		returnvalue+=temp[temp.length()-i-1];
+	
+	return returnvalue;
+}
 
 string convert_size(double size, string format)
 {
@@ -220,4 +237,42 @@ string copy_file(string title, const char *dirfrom, const char *dirto, const cha
 	if (fclose(to)==EOF) return "Cannot close destination file ("+ctoo+")!";
 
 	return "";
+}
+
+int show_terms(string folder)
+{
+	if (exists((folder+"/terms-accepted.cfg").c_str())!=1)//terms not yet accepted
+	{
+		Mess.Dialog(MSG_OK,"Permission is hereby granted, FREE of charge, to any person obtaining a copy of this software and associated configuration files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, publish, distribute, sublicense, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.");
+		Mess.Dialog(MSG_YESNO_DYES,"THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\nDo you accept this terms?");
+		if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
+		{
+			create_file((folder+"/terms-accepted.cfg").c_str());
+			return 1;
+		}
+		else return 0;
+	}
+	return 1;
+}
+
+void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
+{
+	int sizeTitleFont = 40;
+	int sizeFont = 25;
+	string current;
+
+	B1.Mono(COLOR_BLACK);
+	F1.Printf(center_text_x(sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
+	F2.Printf(100, 260, COLOR_WHITE, sizeFont, "Filename: %s", ((string)filename+" ("+convert_size(get_filesize(cfrom.c_str()), "auto").c_str()+")").c_str());
+	F2.Printf(100, 320, COLOR_WHITE, sizeFont, "From: %s", dirfrom);
+	F2.Printf(100, 350, COLOR_WHITE, sizeFont, "To: %s", dirto);
+	current=convert_size(copy_currentsize+(double)countsize, "auto")+" of "+convert_size(copy_totalsize, "auto").c_str()+" copied ("+int_to_string(numfiles_current).c_str()+" of "+int_to_string(numfiles_total).c_str()+" files)";
+	F2.Printf(center_text_x(sizeFont, current.c_str()), 410, COLOR_WHITE, sizeFont, "%s", current.c_str());
+	Graphics->Flip();
+}
+
+int menu_restore_available(string folder)
+{
+	if (opendir((folder+"/backups").c_str()) == NULL) return 0;
+	else return 1;
 }

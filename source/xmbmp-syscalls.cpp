@@ -29,3 +29,59 @@ s32 lv2_get_target_type(uint64_t *type)
 	lv2syscall1(985, (uint64_t) type);
 	return_to_user_prog(s32);
 }
+
+int is_dev_blind_mounted()
+{
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+	sysFSStat dir;
+
+	return sysFsStat(MOUNT_POINT, &dir);
+}
+
+int mount_dev_blind()
+{
+	const char* DEV_BLIND = "CELL_FS_IOS:BUILTIN_FLSH1";	// dev_flash
+	const char* FAT = "CELL_FS_FAT"; //it's also for fat32
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+
+	sysFsMount(DEV_BLIND, FAT, MOUNT_POINT, 0);
+
+	return 0;
+}
+
+int unmount_dev_blind()
+{
+	const char* MOUNT_POINT = "/dev_blind"; //our mount point
+
+	sysFsUnmount(MOUNT_POINT);
+
+	return 0;
+}
+
+string get_firmware_info(string what)
+{
+	uint8_t platform_info[0x18];
+	lv2_get_platform_info(platform_info);
+	uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
+	uint64_t targettype;
+	lv2_get_target_type(&targettype);
+	string type, fwvers;
+
+	//check if current version is supported
+	if (targettype==1) type="CEX";
+	else if (targettype==2) type="DEX";
+	else if (targettype==3) type="DECR";
+	else type="Unknown";
+	if (fw==0x40250) fwvers="4.25";
+	else if (fw==0x40210) fwvers="4.21";
+	else if (fw==0x40200) fwvers="4.20";
+	else if (fw==0x40110) fwvers="4.11";
+	else if (fw==0x30560) fwvers="3.56";
+	else if (fw==0x30550) fwvers="3.55";
+	else if (fw==0x30410) fwvers="3.41";
+	else if (fw==0x30150) fwvers="3.15";
+	else fwvers="0.00";
+
+	if (what=="version") return fwvers;
+	else return type;
+}
