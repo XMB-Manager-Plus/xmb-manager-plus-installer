@@ -25,6 +25,7 @@ string *recursiveListing(string direct);
 string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag);
 void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize);
 int show_terms(string folder);
-int menu_restore_available(string folder);
+int exists_backups(string folder);
+void check_firmware_changes(string folder);
 
 #endif

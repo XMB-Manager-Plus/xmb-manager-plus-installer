@@ -1,24 +1,25 @@
-#include <io/pad.h>
-#include <time.h>
-#include <zlib.h>
 #include "xmbmp-syscalls.h"
 #include "xmbmp-file.h"
 #include "xmbmp-graphics.h"
 //#include "xmbmp-debug.h"
+#include <io/pad.h>
+#include <time.h>
+#include <zlib.h>
 
 //global vars
 string mainfolder;
 string fw_version="";
 string ttype="";
-string menu1[99];
+string menu1[20];
 int menu1_size=0;
-string menu2[99][99];
-string menu2_path[99][99];
-int menu2_size[99];
-string menu3[99];
+string menu2[20][20];
+string menu2_path[20][20];
+int menu2_size[20];
+string menu3[20];
 int menu3_size=0;
 
 //headers
+string get_app_folder(char* path);
 const string currentDateTime();
 string doit(string operation, string foldername, string fw_folder, string app);
 int restore(string foldername);
@@ -27,8 +28,27 @@ int delete_all();
 int delete_one(string foldername, string type);
 void draw_menu(int menu_id, int selected,int choosed, int menu1_pos, int menu1_restore);
 int make_menu_to_array(int whatmenu);
-
 s32 main(s32 argc, char* argv[]);
+
+string get_app_folder(char* path)
+{
+	string folder, ps3loadtid="PS3LOAD00";
+	char * pch;
+	int mcount=0;
+
+	pch = strtok(path,"/");
+	while (pch != NULL)
+	{
+		if (mcount<4) 
+		{
+			if (pch==ps3loadtid) folder=folder+"/XMBMANPLS";
+			else folder=folder+"/"+pch;
+		}
+		mcount++;
+		pch = strtok (NULL,"/");
+	}
+	return folder;
+}
 
 const string currentDateTime()
 {
@@ -420,21 +440,28 @@ int make_menu_to_array(int whatmenu)
 	{
 		menu3_size=0;
 		direct=mainfolder+"/backups";
-		dp = opendir (direct.c_str());
-		if (dp == NULL) return 0;
-		while ( (dirp = readdir(dp) ) )
+		if (exists_backups(mainfolder)==1)
 		{
-			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
+			dp = opendir(direct.c_str());
+			if (dp == NULL) return 0;
+			while ( (dirp = readdir(dp) ) )
 			{
-				menu3[menu3_size]=dirp->d_name;
+				if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
+				{
+					menu3[menu3_size]=dirp->d_name;
+					menu3_size++;
+				}
+			}
+			closedir(dp);
+			if (menu3_size>0)
+			{
+				menu3[menu3_size]="DELETE all backups";
+				menu3_size++;
+				menu3[menu3_size]="Back to main menu";
 				menu3_size++;
 			}
+			else recursiveDelete(direct);
 		}
-		closedir(dp);
-		menu3[menu3_size]="DELETE all backups";
-		menu3_size++;
-		menu3[menu3_size]="Back to main menu";
-		menu3_size++;
 	}
 	return 1;
 }
@@ -499,48 +526,28 @@ void draw_menu(int menu_id, int selected, int choosed, int menu1_pos, int menu1_
 		}
 	}
 	Graphics->Flip();
-	if (menu_color==COLOR_RED) sleep(0.3);
+	if (menu_color==COLOR_RED) sleep(0.7);
+	else if (menu_color==COLOR_YELLOW) sleep(0.2);
 }
 
 s32 main(s32 argc, char* argv[])
 {
-	padInfo padinfo;
+	padInfo2 padinfo2;
 	padData paddata;
-	string firmware_choice, app_choice, ps3loadtid="PS3LOAD00";
-	char * pch;
-	int i, mcount=0;
-	//int frame=0;
-	string ret="";
 	int menu_restore;
 	int menu1_position=0, menu2_position=0, menu3_position=0, mpos=0;
-	int reboot=0;
+	int reboot=0,temp=0;
 	int current_menu=1;
 
 	init_print("/dev_usb000/xmbmanpls_log.txt"); //this will initiate the NoRSX log
-	ioPadInit (7); //this will initialize the controller (7= seven controllers)
+	ioPadInit(MAX_PORT_NUM); //this will initialize the controller (7= seven controllers)
 	print("Getting main folder\r\n");
-	pch = strtok (argv[0],"/");
-	while (pch != NULL)
-	{
-		if (mcount<4) 
-		{
-			if (pch==ps3loadtid) mainfolder=mainfolder+"/XMBMANPLS";
-			else mainfolder=mainfolder+"/"+pch;
-		}
-		mcount++;
-		pch = strtok (NULL,"/");
-	}
-	//Show terms and conditions
+	mainfolder=get_app_folder(argv[0]);
+	menu_restore=exists_backups(mainfolder);
 	print("Show terms\r\n");
 	if (show_terms(mainfolder)!=1) goto end;
 	print("Detecting firmware changes\r\n");
-	if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")!=1 && exists((mainfolder+"/backups").c_str())==1)
-	{
-		Mess.Dialog(MSG_OK,"The system detected a firmware change. All previous backups will be deleted.");
-		ret=recursiveDelete(mainfolder+"/backups");
-		if (ret == "") Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
-		else Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
-	}
+	check_firmware_changes(mainfolder);
 	print("Getting firmware info\r\n");
 	fw_version=get_firmware_info("version");
 	ttype=get_firmware_info("type");
@@ -548,7 +555,6 @@ s32 main(s32 argc, char* argv[])
 	if (make_menu_to_array(0)==0) { Mess.Dialog(MSG_ERROR,"Problem reading folder!"); goto end; }
 	print("Test if firmware is supported\r\n");
 	if (menu1_size==0) { Mess.Dialog(MSG_ERROR,"Your firmware version is not supported."); goto end; }
-	menu_restore=menu_restore_available(mainfolder);
 	make_background(fw_version, ttype, mainfolder);
 	print("Start menu\r\n");
 	Graphics->AppStart();
@@ -557,178 +563,178 @@ s32 main(s32 argc, char* argv[])
 		if (current_menu==1) mpos=menu1_position;
 		else if (current_menu==2) mpos=menu2_position;
 		else if (current_menu==3) mpos=menu3_position;
-		//static time_t starttime = 0;
-		//double fps = 0;
-		//if (starttime == 0) starttime = time (NULL);
-		//else fps = frame / difftime (time (NULL), starttime);
-		//F1.Printf(50,100,COLOR_RED,30,"FPS %f", fps);
 		//BMap.DrawBitmap(&Precalculated_Layer);
-		draw_menu(current_menu,mpos,0,menu1_position,menu_restore);
 		//F1.Printf(50,150,COLOR_RED,30,"Menu 1 position: %d/%d", menu1_position, menu1_size);
 		//F1.Printf(50,200,COLOR_RED,30,"Menu 2 position: %d/%d", menu2_position, menu2_size[menu1_position]);
 		//F1.Printf(50,250,COLOR_RED,30,"Menu 3 position: %d/%d", menu3_position, menu3_size);
 		//F1.Printf(50,300,COLOR_RED,30,"Current menu: %d", current_menu);
 		//F1.Printf(50,350,COLOR_RED,30,"Restore menu: %d", menu_restore);
 		//Graphics->Flip();
-		//frame++;
-		for(i=0;i<MAX_PADS;i++)
+		draw_menu(current_menu,mpos,0,menu1_position,menu_restore);
+		if (ioPadGetInfo2(&padinfo2)==0)
 		{
-			ioPadGetInfo(&padinfo);
-			if (padinfo.status[i])
+			for(int i=0;i<MAX_PORT_NUM;i++)
 			{
-				ioPadGetData(i, &paddata);
-				if (current_menu==1)
+				if (padinfo2.port_status[i])
 				{
-					if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
+					ioPadGetData(i, &paddata);
+					if (current_menu==1)
 					{
-						if (menu1_position<menu1_size-1)
+						if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 						{
-							menu1_position++;
-							if (menu1_position==menu1_size-2 && menu_restore==0) { menu1_position++; }
-						}
-						else menu1_position=0;
-					}
-					else if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
-					{
-						if (menu1_position>0)
-						{
-							menu1_position--;
-							if (menu1_position==menu1_size-2 && menu_restore==0) { menu1_position--; }
-						}
-						else menu1_position=menu1_size-1;
-					}
-					else if (paddata.BTN_CROSS) //Install an app
-					{
-						draw_menu(current_menu,menu1_position,1,menu1_position,menu_restore);
-						if (menu1_position<menu1_size-2)
-						{
-							app_choice=menu1[menu1_position];
-							if (menu2[menu1_position][0]=="All" && menu2_size[menu1_position]==2)
+							if (menu1_position<menu1_size-1)
 							{
-								if (install(menu2_path[menu1_position][0], app_choice)==2)
+								menu1_position++;
+								if (menu1_position==menu1_size-2 && menu_restore==0) { menu1_position++; }
+							}
+							else menu1_position=0;
+						}
+						else if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
+						{
+							if (menu1_position>0)
+							{
+								menu1_position--;
+								if (menu1_position==menu1_size-2 && menu_restore==0) { menu1_position--; }
+							}
+							else menu1_position=menu1_size-1;
+						}
+						else if (paddata.BTN_CROSS) //Install an app
+						{
+							draw_menu(current_menu,menu1_position,1,menu1_position,menu_restore);
+							if (menu1_position<menu1_size-2)
+							{
+								if (menu2[menu1_position][0]=="All" && menu2_size[menu1_position]==2)
+								{
+									temp=install(menu2_path[menu1_position][0], menu1[menu1_position]);
+									if (temp==2)
+									{
+										reboot=1;
+										Graphics->AppExit();
+									}
+									else if (temp==1)
+									{ 
+										if (make_menu_to_array(3)==0)
+										{
+											Mess.Dialog(MSG_ERROR,"Problem reading folder!");
+											Graphics->AppExit();
+										}
+										menu_restore=exists_backups(mainfolder);
+									}
+								}
+								else current_menu=2;
+							}
+							else if (menu1_position<menu1_size-1) current_menu=3;
+							else if (menu1_position<menu1_size) Graphics->AppExit();
+						}
+						else if (paddata.BTN_SQUARE) //Delete an app
+						{
+							if (menu1_position<menu1_size-2)
+							{
+								draw_menu(current_menu,menu1_position,1,menu1_position,menu_restore);
+								if (delete_one(menu1[menu1_position], "app")==1)
+								{
+									if (make_menu_to_array(1)==0)
+									{
+										Mess.Dialog(MSG_ERROR,"Problem reading folder!");
+										Graphics->AppExit();
+									}
+								}
+							}
+						}
+					}
+					else if (current_menu==2)
+					{
+						if (paddata.BTN_CIRCLE) { current_menu=1; }
+						else if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
+						{
+							if (menu2_position<menu2_size[menu1_position]-1) { menu2_position++; }
+							else menu2_position=0;
+						}
+						else if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
+						{
+							if (menu2_position>0) { menu2_position--; }
+							else menu2_position=menu2_size[menu1_position]-1;
+						}
+						else if (paddata.BTN_CROSS) //Install an app
+						{
+							draw_menu(current_menu,menu2_position,1,menu1_position,menu_restore);
+							if (menu2_position<menu2_size[menu1_position]-1)
+							{
+								temp=install(menu2_path[menu1_position][menu2_position], menu1[menu1_position]);
+								if (temp==2)
 								{
 									reboot=1;
 									Graphics->AppExit();
 								}
-								else
-								{ 
+								else if (temp==1)
+								{
 									if (make_menu_to_array(3)==0)
 									{
 										Mess.Dialog(MSG_ERROR,"Problem reading folder!");
 										Graphics->AppExit();
 									}
-									menu_restore=menu_restore_available(mainfolder);
+									menu_restore=exists_backups(mainfolder);
+									current_menu=1;
 								}
 							}
-							else current_menu=2;
+							else current_menu=1;
 						}
-						else if (menu1_position<menu1_size-1) current_menu=3;
-						else if (menu1_position<menu1_size) Graphics->AppExit();
 					}
-					else if (paddata.BTN_SQUARE) //Delete an app
+					else if (current_menu==3)
 					{
-						if (menu1_position<menu1_size-2)
+						if (paddata.BTN_CIRCLE) { current_menu=1; }
+						else if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 						{
-							draw_menu(current_menu,menu1_position,1,menu1_position,menu_restore);
-							if (delete_one(menu1[menu1_position], "app")==1)
-							{
-								if (make_menu_to_array(1)==0)
-								{
-									Mess.Dialog(MSG_ERROR,"Problem reading folder!");
-									Graphics->AppExit();
-								}
-							}
+							if (menu3_position<menu3_size-1) { menu3_position++; }
+							else menu3_position=0;
 						}
-					}
-				}
-				else if (current_menu==2)
-				{
-					if (paddata.BTN_CIRCLE) { current_menu=1; }
-					else if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
-					{
-						if (menu2_position<menu2_size[menu1_position]-1) { menu2_position++; }
-						else menu2_position=0;
-					}
-					else if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
-					{
-						if (menu2_position>0) { menu2_position--; }
-						else menu2_position=menu2_size[menu1_position]-1;
-					}
-					else if (paddata.BTN_CROSS) //Install an app
-					{
-						draw_menu(current_menu,menu2_position,1,menu1_position,menu_restore);
-						if (menu2_position<menu2_size[menu1_position]-1)
+						else if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 						{
-							if (install(menu2_path[menu1_position][menu2_position], app_choice)==2)
-							{
-								reboot=1;
-								Graphics->AppExit();
-							}
-							else
-							{
-								if (make_menu_to_array(3)==0)
-								{
-									Mess.Dialog(MSG_ERROR,"Problem reading folder!");
-									Graphics->AppExit();
-								}
-								menu_restore=menu_restore_available(mainfolder);
-							}
+							if (menu3_position>0) { menu3_position--; }
+							else menu3_position=menu3_size-1;
 						}
-						else current_menu=1;
-					}
-				}
-				else if (current_menu==3)
-				{
-					if (paddata.BTN_CIRCLE) { current_menu=1; }
-					else if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
-					{
-						if (menu3_position<menu3_size-1) { menu3_position++; }
-						else menu3_position=0;
-					}
-					else if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
-					{
-						if (menu3_position>0) { menu3_position--; }
-						else menu3_position=menu3_size-1;
-					}
-					else if (paddata.BTN_CROSS)
-					{
-						draw_menu(current_menu,menu3_position,1,menu1_position,menu_restore);
-						if (menu3_position<menu3_size-2) //Restore a backup
-						{
-							if (restore(menu3[menu3_position])==2)
-							{
-								reboot=1;
-								Graphics->AppExit();
-							}
-						}
-						else if (menu3_position<menu3_size-1) //Delete all backups
-						{
-							if (delete_all()==1)
-							{
-								if (make_menu_to_array(3)==0)
-								{
-									Mess.Dialog(MSG_ERROR,"Problem reading folder!");
-									Graphics->AppExit();
-								}
-								menu_restore=menu_restore_available(mainfolder);
-								current_menu=1;
-							}
-						}
-						else current_menu=1;
-					}
-					else if (paddata.BTN_SQUARE)
-					{
-						if (menu3_position<menu3_size-2) //Delete a backup
+						else if (paddata.BTN_CROSS)
 						{
 							draw_menu(current_menu,menu3_position,1,menu1_position,menu_restore);
-							if (delete_one(menu3[menu3_position], "backup")==1)
+							if (menu3_position<menu3_size-2) //Restore a backup
 							{
-								if (make_menu_to_array(3)==0)
+								if (restore(menu3[menu3_position])==2)
 								{
-									Mess.Dialog(MSG_ERROR,"Problem reading folder!");
+									reboot=1;
 									Graphics->AppExit();
 								}
-								menu_restore=menu_restore_available(mainfolder);
+							}
+							else if (menu3_position<menu3_size-1) //Delete all backups
+							{
+								if (delete_all()==1)
+								{
+									make_menu_to_array(3);
+									menu_restore=exists_backups(mainfolder);
+									current_menu=1;
+									menu1_position++;
+								}
+							}
+							else current_menu=1;
+						}
+						else if (paddata.BTN_SQUARE)
+						{
+							if (menu3_position<menu3_size-2) //Delete a backup
+							{
+								draw_menu(current_menu,menu3_position,1,menu1_position,menu_restore);
+								if (delete_one(menu3[menu3_position], "backup")==1)
+								{
+									if (make_menu_to_array(3)==0)
+									{
+										Mess.Dialog(MSG_ERROR,"Problem reading folder!");
+										Graphics->AppExit();
+									}
+									menu_restore=exists_backups(mainfolder);
+									if (menu_restore==0)
+									{
+										current_menu=1;
+										menu1_position++;
+									}
+								}
 							}
 						}
 					}
@@ -740,6 +746,7 @@ s32 main(s32 argc, char* argv[])
 
 	end:
 	{
+		if (current_menu==1 && mpos==menu1_size-1) draw_menu(current_menu,mpos,0,menu1_position,menu_restore);
 		BMap.ClearBitmap(&Precalculated_Layer);
 		print("End\r\n");
 		if (is_dev_blind_mounted()==0) unmount_dev_blind();

@@ -271,8 +271,18 @@ void draw_copy(string title, const char *dirfrom, const char *dirto, const char 
 	Graphics->Flip();
 }
 
-int menu_restore_available(string folder)
+int exists_backups(string folder)
 {
-	if (opendir((folder+"/backups").c_str()) == NULL) return 0;
-	else return 1;
+	return exists((folder+"/backups").c_str());
+}
+
+void check_firmware_changes(string folder)
+{
+	if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")!=1 && exists_backups(folder)==1)
+	{
+		Mess.Dialog(MSG_OK,"The system detected a firmware change. All previous backups will be deleted.");
+		string ret=recursiveDelete(folder+"/backups");
+		if (ret == "") Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
+		else Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
+	}
 }
