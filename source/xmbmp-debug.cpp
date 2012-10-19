@@ -1,5 +1,4 @@
-#include "xmb-manager-debug.h"
-#include "xmb-manager-include.h"
+#include "xmbmp-debug.h"
 
 void debug_print(string text)
 {
@@ -8,5 +7,3 @@ void debug_print(string text)
 	Graphics->Flip();
 	sleep(10);
 }
-
-

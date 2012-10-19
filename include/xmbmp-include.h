@@ -1,5 +1,5 @@
-#ifndef __XMB_MANAGER_LAZY_INCLUDE_H__
-#define __XMB_MANAGER_LAZY_INCLUDE_H__
+#ifndef __XMBMP_LAZY_INCLUDE_H__
+#define __XMBMP_LAZY_INCLUDE_H__
 
 #include <ppu-lv2.h>
 #include <lv2/sysfs.h>
@@ -17,6 +17,8 @@
 #include <time.h>
 #include <errno.h>
 #include <zlib.h>
+
+#define CHUNK 16384
 using namespace std;
 
 #endif

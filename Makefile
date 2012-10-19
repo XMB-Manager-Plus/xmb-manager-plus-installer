@@ -20,14 +20,12 @@ BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
-
-ICON0		:=	$(CURDIR)/release/ICON0.PNG
-SFOXML		:=	$(CURDIR)/stuff/sfo.xml
 PKGFILES	:=	$(CURDIR)/release
 
 TITLE		:=	XMB Manager Plus v1.00
 APPID		:=	XMBMANPLS
 CONTENTID	:=	UP0001-$(APPID)_00-0000000000000000
+ICON0		:=	$(CURDIR)/release/ICON0.PNG
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -100,7 +98,8 @@ export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
 #---------------------------------------------------------------------------------
 # build a list of include paths
 #---------------------------------------------------------------------------------
-export INCLUDE	:=	$(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
+export INCLUDE	:=	-I$(PORTLIBS)/include/freetype2 \
+			$(foreach dir,$(INCLUDES), -I$(CURDIR)/$(dir)) \
 					$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
 					$(LIBPSL1GHT_INC) \
 					-I$(CURDIR)/$(BUILD)
@@ -113,6 +112,7 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
 .PHONY: $(BUILD) clean
+
 #---------------------------------------------------------------------------------
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
@@ -122,11 +122,14 @@ $(BUILD):
 clean:
 	@echo clean ...
 	@rm -fr $(BUILD) *.elf *.self *.pkg
-#---------------------------------------------------------------------------------
-pkg:	$(BUILD) $(OUTPUT).pkg
+
 #---------------------------------------------------------------------------------
 run:
 	ps3load $(OUTPUT).self
+
+#---------------------------------------------------------------------------------
+pkg:	$(BUILD) $(OUTPUT).pkg
+
 #---------------------------------------------------------------------------------
 else
 

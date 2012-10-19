@@ -1,37 +1,14 @@
-#include <ppu-lv2.h>
-#include <lv2/sysfs.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <io/pad.h>
-#include <NoRSX.h> 
-#include <dirent.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/file.h>
-#include <sys/types.h>
-#include <string>
-#include <algorithm>
-#include <time.h>
-#include <errno.h>
-#include <zlib.h>
-
-#include "xmb-manager-mount-unmount.h"
-#include "xmb-manager-debug.h"
-#include "xmb-manager-file.h"
-
-//#include "xmb-manager-.h"
-
-
-#define MAX_BUFFERS 2
-#define CHUNK 16384
-using namespace std;
+#include "xmbmp-graphics.h"
+#include "xmbmp-mount-unmount.h"
+//#include "xmbmp-debug.h"
+#include "xmbmp-file.h"
 
 //global vars
+string mainfolder;
 string fw_version="";
 string ttype="";
 string menu1[99];
 int menu1_size=0;
-int menu1_restore=1;
 string menu2[99][99];
 string menu2_path[99][99];
 int menu2_size[99];
@@ -39,41 +16,18 @@ string menu3[99];
 int menu3_size=0;
 
 //headers
-
-const string fileCreatedDateTime(const char *path);
 const string currentDateTime();
-
-s32 center_text_x(int fsize, const char* message);
-string int_to_string(int number);
-void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize);
-string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag);
-bool replace(string& str, const string& from, const string& to);
-string correct_path(string dpath, int what);
-string *recursiveListing(string direct);
-string doit(string operation, string foldername, string fw, string app);
-void draw_menu(int menu_id, int selected,int choosed, int menu1_position);
+//bool replace(string& str, const string& from, const string& to);
+string doit(string operation, string foldername, string fw_folder, string app);
 int restore(string foldername);
-int install(string firmware_choice, string app_choice);
+int install(string firmware_folder, string app_choice);
 int delete_all();
 int delete_one(string foldername, string type);
-
-
-//functions
-
-const string fileCreatedDateTime(const char *path)
-{
-	time_t tmod;
-	char buf[80];
-	sysFSStat info;
-
-	if (sysFsStat(path, &info) >= 0)
-	{
-		tmod=info.st_mtime;
-		strftime(buf, sizeof(buf), "%Y-%m-%d %Hh%Mm%Ss", localtime(&tmod));
-		return buf;
-	}
-	else return "";
-}
+void get_firmware_info();
+void draw_menu(int menu_id, int selected,int choosed, int menu1_position, int menu1_restore);
+int make_menu_to_array(int whatmenu);
+int menu_restore_available();
+s32 main(s32 argc, char* argv[]);
 
 // Get current date/time, format is YYYY-MM-DD.HH:mm:ss
 const string currentDateTime()
@@ -89,242 +43,14 @@ const string currentDateTime()
     return buf;
 }
 
-s32 center_text_x(int fsize, const char* message)
-{
-	return (Graphics->width-(strlen(message)*fsize/2))/2;
-}
-
-string int_to_string(int number)
-{
-	if (number == 0) return "0";
-	string temp="";
-	string returnvalue="";
-	while (number>0)
-	{
-		temp+=number%10+48;
-		number/=10;
-	}
-	for (size_t i=0;i<temp.length();i++)
-		returnvalue+=temp[temp.length()-i-1];
-	
-	return returnvalue;
-}
-
-/*
-string z_error(int ret, FILE *source, FILE *dest)
-{
-	switch (ret)
-	{
-		case Z_ERRNO:
-			if (ferror(source)) return "Zlib error: Error reading source file";
-			if (ferror(dest)) return "Zlib error: Error writing to destination directory";
-			break;
-		case Z_STREAM_ERROR: return "Zlib error: Invalid compression level"; break;
-		case Z_DATA_ERROR: return "Zlib error: Invalid or incomplete deflate data"; break;
-		case Z_MEM_ERROR: return "Zlib error: Out of memory"; break;
-		case Z_VERSION_ERROR: return "Zlib error: zlib version mismatch!"; break;
-    }
-	return "";
-}
-
-string z_inflate(FILE *source, FILE *dest)
-{
-    int ret;
-    unsigned have;
-    z_stream strm;
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
-    
-	// allocate inflate state
-    strm.zalloc = Z_NULL;
-    strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL;
-    strm.avail_in = 0;
-    strm.next_in = Z_NULL;
-    ret = inflateInit(&strm);
-	if (ret != Z_OK) return z_error(ret, source, dest);
-	// decompress until deflate stream ends or end of file
-	do
-    {
-		strm.avail_in = fread(in, 1, CHUNK, source);
-		if (ferror(source))
-		{
-			(void)inflateEnd(&strm);
-			return z_error(Z_ERRNO, source, dest);
-		}
-		if (strm.avail_in == 0) break;
-		strm.next_in = in;
-		// run inflate() on input until output buffer not full
-		do
-		{
-            strm.avail_out = CHUNK;
-            strm.next_out = out;
-            ret = inflate(&strm, Z_NO_FLUSH);
-            assert(ret != Z_STREAM_ERROR);  // state not clobbered
-            switch (ret)
-			{
-				case Z_NEED_DICT: ret = Z_DATA_ERROR;     // and fall through
-				case Z_DATA_ERROR:
-				case Z_MEM_ERROR: (void)inflateEnd(&strm); return z_error(ret, source, dest);
-			}
-			have = CHUNK - strm.avail_out;
-			if (fwrite(out, 1, have, dest) != have || ferror(dest))
-			{
-				(void)inflateEnd(&strm);
-				return z_error(Z_ERRNO, source, dest);
-			}
-		}
-		while (strm.avail_out == 0);
-		// done when inflate() says it's done
-	}
-	while (ret != Z_STREAM_END);
-	// clean up and return 
-	(void)inflateEnd(&strm);
-
-	ret = Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
-	if (ret != Z_OK) return z_error(ret, source, dest);
-
-	return "";
-}*/
-
-void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
-{
-	int sizeTitleFont = 40;
-	int sizeFont = 25;
-	string current;
-
-	B1.Mono(COLOR_BLACK);
-	F1.Printf(center_text_x(sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
-	F2.Printf(100, 260, COLOR_WHITE, sizeFont, "Filename: %s", ((string)filename+" ("+convert_size(get_filesize(cfrom.c_str()), "auto").c_str()+")").c_str());
-	F2.Printf(100, 320, COLOR_WHITE, sizeFont, "From: %s", dirfrom);
-	F2.Printf(100, 350, COLOR_WHITE, sizeFont, "To: %s", dirto);
-	current=convert_size(copy_currentsize+(double)countsize, "auto")+" of "+convert_size(copy_totalsize, "auto").c_str()+" copied ("+int_to_string(numfiles_current).c_str()+" of "+int_to_string(numfiles_total).c_str()+" files)";
-	F2.Printf(center_text_x(sizeFont, current.c_str()), 410, COLOR_WHITE, sizeFont, "%s", current.c_str());
-	Graphics->Flip();
-}
-
-string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag)
-{
-	string cfrom=(string)dirfrom+(string)filename;
-	string ctoo=(string)dirto+(string)filename;
-	FILE *from, *to;
-	char buf[8192], buf2[8192]; // BUFSIZE default is 8192 bytes
-	string ret="";
-	size_t size=0;
-	size_t countsize=0;
-	time_t start, now;
-
-	if ((from = fopen(cfrom.c_str(), "rb"))==NULL) return "Cannot open source file ("+cfrom+") for reading!";
-	if (check_flag==1)
-	{
-		if ((to = fopen(ctoo.c_str(), "rb"))==NULL) return "Cannot open destination file ("+ctoo+") for reading!";
-	}
-	else if ((to = fopen(ctoo.c_str(), "wb"))==NULL) return "Cannot open destination file ("+ctoo+") for writing!";
-	draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
-	start = time(NULL);
-	time(&start);
-	while(!feof(from))
-	{
-		size = fread(buf, 1, 8192, from);
-		if(ferror(from))  return "Error reading source file ("+cfrom+")!";
-		if (check_flag==1)
-		{
-			size = fread(buf2, 1, 8192, to);
-			if (ferror(to)) return "Error reading destination file ("+ctoo+")!";
-			if (memcmp(buf, buf2, 8192)!=0) return "Source and destination files are different!";
-		}
-		else
-		{
-			fwrite(buf, 1, size, to);
-			if (ferror(to)) return "Error writing destination file ("+ctoo+")!";
-		}
-		countsize=countsize+size;
-		now = time(NULL);
-		time(&now);
-		if (difftime(now,start)>=0.3)
-		{
-			draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
-			start = time(NULL);
-			time(&start);
-		}
-	}
-
-	if (fclose(from)==EOF) return "Cannot close source file ("+cfrom+")!";
-	if (fclose(to)==EOF) return "Cannot close destination file ("+ctoo+")!";
-
-	return "";
-}
-
-bool replace(string& str, const string& from, const string& to)
+/*bool replace(string& str, const string& from, const string& to)
 {
     size_t start_pos = str.find(from);
     if(start_pos == string::npos)
         return false;
     str.replace(start_pos, from.length(), to);
     return true;
-}
-
-string correct_path(string dpath, int what)
-{
-	string cpath;
-
-	cpath=dpath;
-	if (what==1 || what==2) if (cpath.find("PS3~")!=string::npos) cpath.replace( cpath.find("PS3~"), 4, "");
-	if (what==1 || what==2) replace(cpath.begin(), cpath.end(), '~', '/');
-	if (what==2) if (cpath.find("dev_flash")!=string::npos) cpath.replace( cpath.find("dev_flash"), 9, "dev_blind");
-
-	return "/"+cpath;
-}
-
-string *recursiveListing(string direct)
-{
-	string dfile;
-	DIR *dp;
-	struct dirent *dirp=NULL;
-	string *listed_file_names = NULL;  //Pointer for an array to hold the filenames.
-	string *sub_listed_file_names = NULL;  //Pointer for an array to hold the filenames.
-	int aindex=0;
-
-	listed_file_names = new string[5000];
-	sub_listed_file_names = new string[5000];
-	dp = opendir (direct.c_str());
-	if (dp != NULL)
-	{
-		while ((dirp = readdir (dp)))
-		{
-			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
-			{
-				dfile = direct + "/" + dirp->d_name;
-				if (dirp->d_type == DT_DIR)
-				{
-					sub_listed_file_names=recursiveListing(dfile);
-					//Mess.Dialog(MSG_OK,("Dir: "+dfile+" "+int_to_string(sizeof(sub_listed_file_names)/sizeof(sub_listed_file_names[0]))).c_str());
-					int i=0;
-					while (strcmp(sub_listed_file_names[i].c_str(),"") != 0)
-					{
-						listed_file_names[aindex]=sub_listed_file_names[i];
-						//Mess.Dialog(MSG_OK,("file: "+listed_file_names[aindex]).c_str());
-						i++;
-						aindex++;
-						Graphics->Flip();
-					}
-					//Mess.Dialog(MSG_OK,("Dir: "+dfile+" "+int_to_string(i)).c_str());
-				}
-				else
-				{
-					listed_file_names[aindex]=dfile;
-					//Mess.Dialog(MSG_OK,("File: "+listed_file_names[aindex]).c_str());
-					aindex++;
-				}
-			}
-			Graphics->Flip();
-		}
-		closedir(dp);
-	}
-
-	return listed_file_names;
-}
-
+}*/
 
 string doit(string operation, string foldername, string fw_folder, string app)
 {
@@ -383,7 +109,6 @@ string doit(string operation, string foldername, string fw_folder, string app)
 					if (ret != "") return ret;
 				}*/
 			}
-			Graphics->Flip();
 		}
 		closedir(dp);
 		title="Backing up files ...";
@@ -402,7 +127,6 @@ string doit(string operation, string foldername, string fw_folder, string app)
 				if (dest_paths[findex].find("dev_blind")!=string::npos) mountblind=1;
 				findex++;
 			}
-			Graphics->Flip();
 		}
 		closedir(dp);
 		title="Restoring files ...";
@@ -422,7 +146,6 @@ string doit(string operation, string foldername, string fw_folder, string app)
 				findex++;
 			}
 			//check zip files
-			Graphics->Flip();
 		}
 		closedir(dp);
 		title="Copying files ...";
@@ -464,7 +187,6 @@ string doit(string operation, string foldername, string fw_folder, string app)
 				numfiles_total+=1;
 			}
 			i++;
-			Graphics->Flip();
 		}
 	}
 
@@ -492,7 +214,6 @@ string doit(string operation, string foldername, string fw_folder, string app)
 					sourcefile=dest.substr(0, pos+1);
 					//Mess.Dialog(MSG_OK,("folder: "+sourcefile+" "+int_to_string(pos)+" "+int_to_string((int)dest.size()-1)).c_str());
 					if (exists(sourcefile.c_str())!=1) create_dir(sourcefile);
-					Graphics->Flip();
 				}
 				while (pos != dest.size()-1);
 			}
@@ -502,7 +223,6 @@ string doit(string operation, string foldername, string fw_folder, string app)
 		copy_currentsize+=source_size;
 		numfiles_current+=1;
 		i++;
-		Graphics->Flip();
 	}
 
 	//check files
@@ -521,88 +241,15 @@ string doit(string operation, string foldername, string fw_folder, string app)
 		copy_currentsize+=source_size;
 		numfiles_current+=1;
 		i++;
-		Graphics->Flip();
 	}
 
 	return "";
 }
 
-void draw_menu(int menu_id, int selected,int choosed, int menu1_position)
-{
-	string IMAGE_PATH=mainfolder+"/data/images/logo.png";
-	int posy=0;
-
-    //i want to display a PNG. i need to define the structure pngData (jpgData if you need to load a JPG).
-    pngData png;
-	//i need as first thing to initializa the Image class:
-	Image I1(Graphics); 
-    //Now i need to load the image. you can use LoadPNG (or LoadJPG if a jpg)
-	B1.Mono(COLOR_BLACK);
-    I1.LoadPNG(IMAGE_PATH.c_str(), &png);
-	u32 imgX =(Graphics->width/2)-(png.width/2), imgY = 30;
-	//Now you loaded the png into memory. you need to display it: This will draw the image at x = 200 and y = 300 on the buffer.
-	I1.AlphaDrawIMG(imgX,imgY,&png);
-	int sizeTitleFont = 40;
-	int sizeFont = 30;
-	int menu_color=COLOR_WHITE;
-	string menu1_text;
-
-	posy=260;
-	if (menu_id==1)
-	{
-		F1.Printf(center_text_x(sizeTitleFont, "INSTALLER MENU"),220, 0xd38900, sizeTitleFont, "INSTALLER MENU");
-		for(int j=0;j<menu1_size;j++)
-		{
-			if (j<menu1_size-1) posy=posy+sizeFont+4;
-			else posy=posy+(2*(sizeFont+4));
-			if (j==choosed) menu_color=COLOR_RED;
-			else if (j==selected) menu_color=COLOR_YELLOW;
-			else menu_color=COLOR_WHITE;
-			if (j==menu1_size-2 && menu1_restore==0) menu_color=COLOR_GREY;
-			if (j<menu1_size-2) menu1_text="INSTALL "+menu1[j];
-			else menu1_text=menu1[j];
-
-			F2.Printf(center_text_x(sizeFont, menu1_text.c_str()),posy,menu_color,sizeFont, "%s",menu1_text.c_str());
-		}
-	}
-	else if (menu_id==2)
-	{
-		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
-		for(int j=0;j<menu2_size[menu1_position];j++)
-		{
-			if (j<menu2_size[menu1_position]-1) posy=posy+sizeFont+4;
-			else posy=posy+(2*(sizeFont+4));
-			if (j==choosed) menu_color=COLOR_RED;
-			else if (j==selected) menu_color=COLOR_YELLOW;
-			else menu_color=COLOR_WHITE;
-			F2.Printf(center_text_x(sizeFont, menu2[menu1_position][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[menu1_position][j].c_str());
-		}
-	}
-	else if (menu_id==3)
-	{
-		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),220,	0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
-		for(int j=0;j<menu3_size;j++)
-		{
-			if (j<menu3_size-2) posy=posy+sizeFont+4;
-			else posy=posy+(2*(sizeFont+4));
-			if (j==choosed) menu_color=COLOR_RED;
-			else if (j==selected) menu_color=COLOR_YELLOW;
-			else menu_color=COLOR_WHITE;
-			F2.Printf(center_text_x(sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
-		}
-	}
-	F2.Printf(center_text_x(sizeFont, "Firmware: X.XX (CEX)"),Graphics->height-(sizeFont+20+(sizeFont-5)+10),0xc0c0c0,sizeFont, "Firmware: %s (%s)", fw_version.c_str(), ttype.c_str());
-	F2.Printf(center_text_x(sizeFont-5, "Installer created by XMBM+ Team"),Graphics->height-((sizeFont-5)+10),0xd38900,sizeFont-5,     "Installer created by XMBM+ Team");
-	
-	Graphics->Flip();
-	if (menu_color==COLOR_RED) sleep(0.02);
-}
-
 int restore(string foldername)
 {
 	string ret="";
-	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\n"
-			"If you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	
 	Mess.Dialog(MSG_YESNO_DYES,("Are you sure you want to restore '"+foldername+"' backup?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
@@ -622,8 +269,7 @@ int restore(string foldername)
 		}
 		else //problem in the restore process so emit a warning
 		{
-			Mess.Dialog(MSG_ERROR,("Backup '"+foldername+"' has not restored! A error occured while restoring the backup!\n\n"
-						"Error: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
+			Mess.Dialog(MSG_ERROR,("Backup '"+foldername+"' has not restored! A error occured while restoring the backup!\n\nError: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
 		}
 	}
 
@@ -633,8 +279,7 @@ int restore(string foldername)
 int install(string firmware_folder, string app_choice)
 {
 	string ret="";
-	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\n"
-			"If you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	string foldername=currentDateTime()+" Before "+app_choice;
 
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to install '"+app_choice+"'?"+problems).c_str());
@@ -688,8 +333,7 @@ int delete_all()
 		}
 		else //problem in the delete process so emit a warning
 		{
-			Mess.Dialog(MSG_ERROR,("Backup folders were not deleted! A error occured while deleting the folders!\n\n"
-						"Error: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
+			Mess.Dialog(MSG_ERROR,("Backup folders were not deleted! A error occured while deleting the folders!\n\nError: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
 		}
 	}
 	return 0;
@@ -712,47 +356,220 @@ int delete_one(string foldername, string type)
 		}
 		else //problem in the delete process so emit a warning
 		{
-			Mess.Dialog(MSG_ERROR,("A error occured while deleting the "+type+" '"+foldername+"'!\n\n"
-						"Error: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
+			Mess.Dialog(MSG_ERROR,("A error occured while deleting the "+type+" '"+foldername+"'!\n\nError: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
 		}
 	}
 	return 0;
 }
 
-int main(s32 argc, char* argv[])
+void get_firmware_info()
 {
-	//this is the structure for the pad controllers
-	padInfo padinfo;
-	padData paddata;
-	string firmware_choice;
-	string app_choice;
-	string direct;
-	string direct2;
-	DIR *dp;
-	DIR *dp2;
-	struct dirent *dirp;
-	struct dirent *dirp2;
-	int mcount=0;
-	char * pch;
-	string ps3loadtid="PS3LOAD00";
-	int i;
-	int ifw=0;
-	int iapp=0;
-	string ret="";
-	int menu1_position=0;
-	int menu2_position=0;
-	int menu3_position=0;
-
 	uint8_t platform_info[0x18];
 	lv2_get_platform_info(platform_info);
 	uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
 	uint64_t targettype;
 	lv2_get_target_type(&targettype);
 
-	//this will initialize the controller (7= seven controllers)
-	ioPadInit (7);
+	//check if current version is supported
+	if (targettype==1) ttype="CEX";
+	else if (targettype==2) ttype="DEX";
+	else if (targettype==3) ttype="DECR";
+	else ttype="Unknown";
+	if (fw==0x40250) fw_version="4.25";
+	else if (fw==0x40210) fw_version="4.21";
+	else if (fw==0x40200) fw_version="4.20";
+	else if (fw==0x40110) fw_version="4.11";
+	else if (fw==0x30560) fw_version="3.56";
+	else if (fw==0x30550) fw_version="3.55";
+	else if (fw==0x30410) fw_version="3.41";
+	else if (fw==0x30150) fw_version="3.15";
+	else fw_version="0.00";
+}
 
-	//Get main folder
+void draw_menu(int menu_id, int selected, int choosed, int menu1_position, int menu1_restore)
+{
+	int j=0;
+	int posy=0;
+	int sizeTitleFont = 40;
+	int sizeFont = 30;
+	int menu_color=COLOR_WHITE;
+	string menu1_text;
+
+	B1.Mono(COLOR_BLACK);
+	BMap.DrawBitmap(&Precalculated_Layer);
+	posy=260;
+	if (menu_id==1)
+	{
+		F1.Printf(center_text_x(sizeTitleFont, "INSTALLER MENU"),220, 0xd38900, sizeTitleFont, "INSTALLER MENU");
+		for(j=0;j<menu1_size;j++)
+		{
+			if (j<menu1_size-1) posy=posy+sizeFont+4;
+			else posy=posy+(2*(sizeFont+4));
+			if (j==selected)
+			{
+				if (choosed==1) menu_color=COLOR_RED;
+				else menu_color=COLOR_YELLOW;
+			}
+			else menu_color=COLOR_WHITE;
+			if (j==menu1_size-2 && menu1_restore==0) menu_color=COLOR_GREY;
+			if (j<menu1_size-2) menu1_text="INSTALL "+menu1[j];
+			else menu1_text=menu1[j];
+			F2.Printf(center_text_x(sizeFont, menu1_text.c_str()),posy,menu_color,sizeFont, "%s",menu1_text.c_str());
+		}
+	}
+	else if (menu_id==2)
+	{
+		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
+		for(j=0;j<menu2_size[menu1_position];j++)
+		{
+			if (j<menu2_size[menu1_position]-1) posy=posy+sizeFont+4;
+			else posy=posy+(2*(sizeFont+4));
+			if (j==selected)
+			{
+				if (choosed==1) menu_color=COLOR_RED;
+				else menu_color=COLOR_YELLOW;
+			}
+			else menu_color=COLOR_WHITE;
+			F2.Printf(center_text_x(sizeFont, menu2[menu1_position][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[menu1_position][j].c_str());
+		}
+	}
+	else if (menu_id==3)
+	{
+		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),220,	0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
+		for(j=0;j<menu3_size;j++)
+		{
+			if (j<menu3_size-2) posy=posy+sizeFont+4;
+			else posy=posy+(2*(sizeFont+4));
+			if (j==selected)
+			{
+				if (choosed==1) menu_color=COLOR_RED;
+				else menu_color=COLOR_YELLOW;
+			}
+			else menu_color=COLOR_WHITE;
+			F2.Printf(center_text_x(sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
+		}
+	}
+	Graphics->Flip();
+	if (menu_color==COLOR_RED) sleep(0.3);
+}
+
+int make_menu_to_array(int whatmenu)
+{
+	int ifw=0;
+	int iapp=0;
+	DIR *dp;
+	DIR *dp2;
+	struct dirent *dirp;
+	struct dirent *dirp2;
+	string direct;
+	string direct2;
+
+	if (whatmenu==1 || whatmenu==2 || whatmenu==0)
+	{
+		iapp=0;
+		direct=mainfolder+"/apps";
+		dp = opendir (direct.c_str());
+		if (dp == NULL) return 0;
+		while ( (dirp = readdir(dp) ) )
+		{
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
+			{
+				//second menu
+				ifw=0;
+				direct2=direct+"/"+dirp->d_name;
+				dp2 = opendir (direct2.c_str());
+				if (dp2 == NULL) return 0;
+				while ( (dirp2 = readdir(dp2) ) )
+				{
+					if ( strcmp(dirp2->d_name, ".") != 0 && strcmp(dirp2->d_name, "..") != 0 && strcmp(dirp2->d_name, "") != 0 && dirp2->d_type == DT_DIR)
+					{
+						string fwfolder=(string)dirp2->d_name;
+						string app_fwv=fwfolder.substr(0,fwfolder.find("-"));
+						string app_fwt=fwfolder.substr(app_fwv.size()+1,fwfolder.rfind("-")-app_fwv.size()-1);
+						string app_fwc=fwfolder.substr(app_fwv.size()+1+app_fwt.size()+1);
+						//Mess.Dialog(MSG_OK,(app_fwv+"|"+app_fwt+"|"+app_fwc).c_str());
+						if ((strcmp(app_fwv.c_str(), fw_version.c_str())==0 || strcmp(app_fwv.c_str(), "All")==0) && (strcmp(app_fwt.c_str(), ttype.c_str())==0 || strcmp(app_fwt.c_str(), "All")==0))
+						{
+							menu2[iapp][ifw]=app_fwc;
+							menu2_path[iapp][ifw]=dirp2->d_name;
+							ifw++;
+						}
+					}
+				}
+				closedir(dp2);
+				if (ifw!=0) //has apps for the current firmware version
+				{
+					menu2[iapp][ifw]="Back to main menu";
+					ifw++;
+					menu2_size[iapp]=ifw;
+					menu1[iapp]=dirp->d_name;
+					iapp++;
+				}
+			}
+		}
+		closedir(dp);
+		//print(("iapp:"+int_to_string(iapp)+"\n").c_str());
+		if (iapp!=0)
+		{
+			menu1[iapp]="RESTORE a backup";
+			iapp++;
+			menu1[iapp]="Exit to XMB";
+			iapp++;
+		}
+		menu1_size=iapp;
+	}
+	if (whatmenu==3 || whatmenu==0)
+	{
+		menu3_size=0;
+		direct=mainfolder+"/backups";
+		dp = opendir (direct.c_str());
+		if (dp == NULL) return 0;
+		while ( (dirp = readdir(dp) ) )
+		{
+			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
+			{
+				menu3[menu3_size]=dirp->d_name;
+				menu3_size++;
+			}
+		}
+		closedir(dp);
+		menu3[menu3_size]="DELETE all backups";
+		menu3_size++;
+		menu3[menu3_size]="Back to main menu";
+		menu3_size++;
+	}
+	return 1;
+}
+
+int menu_restore_available()
+{
+	if (opendir ((mainfolder+"/backups").c_str()) == NULL) return 0;
+	else return 1;
+}
+
+s32 main(s32 argc, char* argv[])
+{
+	//this is the structure for the pad controllers
+	padInfo padinfo;
+	padData paddata;
+	string firmware_choice;
+	string app_choice;
+	int mcount=0;
+	char * pch;
+	string ps3loadtid="PS3LOAD00";
+	//int i;
+	string ret="";
+	int menu_restore;
+	int menu1_position=0;
+	int menu2_position=0;
+	int menu3_position=0;
+	int reboot=0;
+	int current_menu=1, old_current_menu=1;
+	int mpos=menu1_position, old_mpos=menu1_position;
+
+	init_print("/dev_usb000/xmbmanpls_log.txt"); //this will initiate the NoRSX log
+	ioPadInit (7); //this will initialize the controller (7= seven controllers)
+	print("Getting main folder\n");
 	pch = strtok (argv[0],"/");
 	while (pch != NULL)
 	{
@@ -764,11 +581,10 @@ int main(s32 argc, char* argv[])
 		mcount++;
 		pch = strtok (NULL,"/");
 	}
-
 	//Show terms and conditions
+	print("Show terms\n");
 	if (show_terms()!=1) goto end;
-
-	//DETECT FIRMWARE CHANGES WERE
+	print("Detecting firmware changes\n");
 	if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")!=1 && exists((mainfolder+"/backups").c_str())==1)
 	{
 		Mess.Dialog(MSG_OK,"The system detected a firmware change. All previous backups will be deleted.");
@@ -776,286 +592,194 @@ int main(s32 argc, char* argv[])
 		if (ret == "") Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
 		else Mess.Dialog(MSG_ERROR,("Problem with delete!\n\nError: "+ret).c_str());
 	}
-
-	//check if current version is supported
-	if (targettype==1) ttype="CEX";
-	else if (targettype==2) ttype="DEX";
-	else if (targettype==3) ttype="DECR";
-	if (fw==0x40250) fw_version="4.25";
-	else if (fw==0x40210) fw_version="4.21";
-	else if (fw==0x40200) fw_version="4.20";
-	else if (fw==0x40110) fw_version="4.11";
-	else if (fw==0x30560) fw_version="3.56";
-	else if (fw==0x30550) fw_version="3.55";
-	else if (fw==0x30410) fw_version="3.41";
-	else if (fw==0x30150) fw_version="3.15";
-
+	print("Getting firmware info\n");
+	get_firmware_info();
+	print("Save menu options to array\n");
+	if (make_menu_to_array(0)==0) { Mess.Dialog(MSG_ERROR,"Problem reading folder!"); goto end; }
+	if (menu1_size==0) { Mess.Dialog(MSG_ERROR,"Your firmware version is not supported."); goto end; }
+	menu_restore=menu_restore_available();
+	make_background(fw_version, ttype);
+	print("Start menu\n");
 	Graphics->AppStart();
-
-	start:
-	//make menus arrays
-	iapp=0;
-	direct=mainfolder+"/apps";
-	dp = opendir (direct.c_str());
-	if (dp == NULL) return 0;
-	while ( (dirp = readdir(dp) ) )
-	{
-		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
-		{
-			//second menu
-			ifw=0;
-			direct2=direct+"/"+dirp->d_name;
-			dp2 = opendir (direct2.c_str());
-			if (dp2 == NULL) return 0;
-			while ( (dirp2 = readdir(dp2) ) )
-			{
-				if ( strcmp(dirp2->d_name, ".") != 0 && strcmp(dirp2->d_name, "..") != 0 && strcmp(dirp2->d_name, "") != 0 && dirp2->d_type == DT_DIR)
-				{
-					string fwfolder=(string)dirp2->d_name;
-					string app_fwv=fwfolder.substr(0,fwfolder.find("-"));
-					string app_fwt=fwfolder.substr(app_fwv.size()+1,fwfolder.rfind("-")-app_fwv.size()-1);
-					string app_fwc=fwfolder.substr(app_fwv.size()+1+app_fwt.size()+1);
-					//Mess.Dialog(MSG_OK,(app_fwv+"|"+app_fwt+"|"+app_fwc).c_str());
-					if ((strcmp(app_fwv.c_str(), fw_version.c_str())==0 || strcmp(app_fwv.c_str(), "All")==0) && (strcmp(app_fwt.c_str(), ttype.c_str())==0 || strcmp(app_fwt.c_str(), "All")==0))
-					{
-						menu2[iapp][ifw]=app_fwc;
-						menu2_path[iapp][ifw]=dirp2->d_name;
-						ifw++;
-					}
-				}
-				Graphics->Flip();
-			}
-			closedir(dp2);
-			if (ifw!=0) //has apps for the current firmware version
-			{
-				menu2[iapp][ifw]="Back to main menu";
-				ifw++;
-				menu2_size[iapp]=ifw;
-				menu1[iapp]=dirp->d_name;
-				iapp++;
-			}
-		}
-		Graphics->Flip();
-	}
-	closedir(dp);
-
-	if (iapp!=0)
-	{
-		menu1[iapp]="RESTORE a backup";
-		iapp++;
-		menu1[iapp]="Exit to XMB";
-		iapp++;
-		menu1_size=iapp;
-	}
-	else
-	{
-		Mess.Dialog(MSG_ERROR,"Your firmware version is not supported.");
-		goto end;
-	}
-
-	//Start menu
-	menu1_position=0;
-	
-	menu_1:
-	if (opendir ((mainfolder+"/backups").c_str()) == NULL)
-	{
-		menu1_restore=0;
-		if (menu1_position==menu1_size-2) menu1_position--;
-	}
-	else menu1_restore=1;
-
-	draw_menu(1,menu1_position,-1,0);
+	draw_menu(current_menu,mpos,0,menu1_position,menu_restore);
+	Graphics->Flip();
 	while (Graphics->GetAppStatus())
 	{
-		ioPadGetInfo (&padinfo);
-		//this will wait for a START from any pad
-		for(i = 0; i < MAX_PADS; i++)
+		if (current_menu==1) mpos=menu1_position;
+		else if (current_menu==2) mpos=menu2_position;
+		else if (current_menu==3) mpos=menu3_position;
+		if (old_current_menu!=current_menu || old_mpos!=mpos)
 		{
-			if (padinfo.status[i])
+			//B1.Mono(COLOR_BLACK);
+			//F2.Printf(50,100,COLOR_RED,30, "menu: %d pos: %d",current_menu, mpos);
+			draw_menu(current_menu,mpos,0,menu1_position,menu_restore);
+			old_current_menu=current_menu;
+			old_mpos=mpos;
+		}
+		Graphics->Flip();
+		ioPadGetInfo (&padinfo);
+		//for(i = 0; i < MAX_PADS; i++)
+		//{
+		if (padinfo.status[0])
+		{
+			ioPadGetData (0, &paddata);
+			if (current_menu==1)
 			{
-				ioPadGetData (i, &paddata);
-				//if (paddata.BTN_START) goto end;
+				//if (menu_restore==1 && menu1_position==menu1_size-2) menu1_position--;
 				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 				{
 					if (menu1_position<menu1_size-1)
 					{
 						menu1_position++;
-						if (menu1_position==menu1_size-2 && menu1_restore==0) menu1_position++;
+						//if (menu1_position==menu1_size-2 && menu_restore==0) menu1_position++;
 					}
 					else menu1_position=0;
-					goto menu_1;
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
 					if (menu1_position>0)
 					{
 						menu1_position--;
-						if (menu1_position==menu1_size-2 && menu1_restore==0) menu1_position--;
+						//if (menu1_position==menu1_size-2 && menu_restore==0) menu1_position--;
 					}
 					else menu1_position=menu1_size-1;
-					goto menu_1;
 				}
 				if (paddata.BTN_CROSS) //Install an app
 				{
-					draw_menu(1,-1,menu1_position,0);
+					draw_menu(current_menu,menu1_position,1,menu1_position,menu_restore);
 					if (menu1_position<menu1_size-2)
 					{
 						app_choice=menu1[menu1_position];
 						if (menu2[menu1_position][0]=="All" && menu2_size[menu1_position]==2)
 						{
-							if (install(menu2_path[menu1_position][0], app_choice)==2) goto end_with_reboot;
-							else goto menu_1;
+							if (install(menu2_path[menu1_position][0], app_choice)==2)
+							{
+								reboot=1;
+								Graphics->AppExit();
+							}
+							else
+							{ 
+								if (make_menu_to_array(3)==0)
+								{ Mess.Dialog(MSG_ERROR,"Problem reading folder!"); Graphics->AppExit(); }
+								menu_restore=menu_restore_available();
+							}
 						}
-						else goto continue_to_menu2;
+						else current_menu=2;
 					}
-					else if (menu1_position<menu1_size-1) goto continue_to_menu3;
-					else if (menu1_position<menu1_size) goto end;
-					else goto menu_1;
+					else if (menu1_position<menu1_size-1) current_menu=3;
+					else if (menu1_position<menu1_size) Graphics->AppExit();
 				}
 				if (paddata.BTN_SQUARE) //Delete an app
 				{
 					if (menu1_position<menu1_size-2)
 					{
-						draw_menu(1,-1,menu1_position,0);
-						if (delete_one(menu1[menu1_position], "app")==1) goto start;
-						else goto menu_1;
+						draw_menu(current_menu,menu1_position,1,menu1_position,menu_restore);
+						if (delete_one(menu1[menu1_position], "app")==1)
+						{
+							if (make_menu_to_array(1)==0)
+							{ Mess.Dialog(MSG_ERROR,"Problem reading folder!"); Graphics->AppExit(); }
+						}
 					}
 				}
 			}
-		}
-	}
-
-	continue_to_menu2:
-	menu2_position=0;
-	menu_2:
-	draw_menu(2,menu2_position,-1,menu1_position);
-	while (1)
-	{
-		ioPadGetInfo (&padinfo);
-		//this will wait for a START from any pad
-		for(i = 0; i < MAX_PADS; i++)
-		{
-			if (padinfo.status[i])
+			else if (current_menu==2)
 			{
-				ioPadGetData (i, &paddata);
-				//if (paddata.BTN_START) goto end;
-				if (paddata.BTN_CIRCLE) goto menu_1;
+				if (paddata.BTN_CIRCLE) current_menu=1;
 				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 				{
 					if (menu2_position<menu2_size[menu1_position]-1) menu2_position++;
 					else menu2_position=0;
-					goto menu_2;
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
 					if (menu2_position>0) menu2_position--;
 					else menu2_position=menu2_size[menu1_position]-1;
-					goto menu_2;
 				}
-				if (paddata.BTN_CROSS)
+				if (paddata.BTN_CROSS) //Install an app
 				{
-					draw_menu(2,-1,menu2_position,menu1_position);
+					draw_menu(current_menu,menu2_position,1,menu1_position,menu_restore);
 					if (menu2_position<menu2_size[menu1_position]-1)
 					{
-						if (install(menu2_path[menu1_position][menu2_position], app_choice)==2) goto end_with_reboot;
-						else goto menu_2;
+						if (install(menu2_path[menu1_position][menu2_position], app_choice)==2)
+						{
+							reboot=1;
+							Graphics->AppExit();
+						}
+						else
+						{
+							if (make_menu_to_array(3)==0)
+							{ Mess.Dialog(MSG_ERROR,"Problem reading folder!"); Graphics->AppExit(); }
+							menu_restore=menu_restore_available();
+						}
 					}
-					else goto menu_1;
+					else current_menu=1;
 				}
 			}
-		}
-		
-	}
-
-	continue_to_menu3:
-	menu3_size=0;
-	direct=mainfolder+"/backups";
-	dp = opendir (direct.c_str());
-	if (dp == NULL) return 0;
-	while ( (dirp = readdir(dp) ) )
-	{
-		if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
-		{
-			menu3[menu3_size]=dirp->d_name;
-			menu3_size++;
-		}
-		Graphics->Flip();
-	}
-	closedir(dp);
-	menu3[menu3_size]="DELETE all backups";
-	menu3_size++;
-	menu3[menu3_size]="Back to main menu";
-	menu3_size++;
-	menu3_position=0;
-	menu_3:
-	draw_menu(3,menu3_position,-1,0);
-	while (1)
-	{
-		ioPadGetInfo (&padinfo);
-		//this will wait for a START from any pad
-		for(i = 0; i < MAX_PADS; i++)
-		{
-			if (padinfo.status[i])
+			else if (current_menu==3)
 			{
-				ioPadGetData (i, &paddata);
-				//if (paddata.BTN_START) goto end;
-				if (paddata.BTN_CIRCLE) goto menu_1;
+				if (paddata.BTN_CIRCLE) current_menu=1;
 				if (paddata.BTN_DOWN || paddata.ANA_L_V == 0x00FF || paddata.ANA_R_V == 0x00FF)
 				{
 					if (menu3_position<menu3_size-1) menu3_position++;
 					else menu3_position=0;
-					goto menu_3;
 				}
 				if (paddata.BTN_UP || paddata.ANA_L_V == 0x0000 || paddata.ANA_R_V == 0x0000)
 				{
 					if (menu3_position>0) menu3_position--;
 					else menu3_position=menu3_size-1;
-					goto menu_3;
 				}
 				if (paddata.BTN_CROSS)
 				{
-					draw_menu(3,-1,menu3_position,0);
+					draw_menu(current_menu,menu3_position,1,menu1_position,menu_restore);
 					if (menu3_position<menu3_size-2) //Restore a backup
 					{
-						if (restore(menu3[menu3_position])==2) goto end_with_reboot;
-						else goto menu_3;
+						if (restore(menu3[menu3_position])==2)
+						{
+							reboot=1;
+							Graphics->AppExit();
+						}
 					}
 					else if (menu3_position<menu3_size-1) //Delete all backups
 					{
-						if (delete_all()==1) goto menu_1;
-						else goto menu_3;
+						if (delete_all()==1)
+						{
+							if (make_menu_to_array(3)==0)
+							{ Mess.Dialog(MSG_ERROR,"Problem reading folder!"); Graphics->AppExit(); }
+							menu_restore=menu_restore_available();
+							current_menu=1;
+						}
 					}
-					else goto menu_1;
+					else current_menu=1;
 				}
 				if (paddata.BTN_SQUARE)
 				{
 					if (menu3_position<menu3_size-2) //Delete a backup
 					{
-						draw_menu(3,-1,menu3_position,0);
-						if (delete_one(menu3[menu3_position], "backup")==1) goto continue_to_menu3;
-						else goto menu_3;
+						draw_menu(current_menu,menu3_position,1,menu1_position,menu_restore);
+						if (delete_one(menu3[menu3_position], "backup")==1)
+						{
+							if (make_menu_to_array(3)==0)
+							{ Mess.Dialog(MSG_ERROR,"Problem reading folder!"); Graphics->AppExit(); }
+							menu_restore=menu_restore_available();
+						}
 					}
 				}
 			}
 		}
+		//}
 	}
-
-	end_with_reboot:
-	{
-		Graphics->AppExit();
-		if (is_dev_blind_mounted()==0) unmount_dev_blind();
-		Graphics->NoRSX_Exit(); //This will uninit the NoRSX lib
-		ioPadEnd(); //this will uninitialize the controllers
-		reboot_sys(); //reboot
-	}
+	goto end;
 
 	end:
 	{
-		Mess.Dialog(MSG_OK,"Exiting..");
-		Graphics->AppExit();
+		BMap.ClearBitmap(&Precalculated_Layer);
+		print("End\n");
 		if (is_dev_blind_mounted()==0) unmount_dev_blind();
-		Graphics->NoRSX_Exit();
-		ioPadEnd();
+		end_print(); //close log
+		Graphics->NoRSX_Exit(); //This will uninit the NoRSX lib
+		ioPadEnd(); //this will uninitialize the controllers
+		if (reboot==1) reboot_sys(); //reboot
 	}
+
 	return 0;
 }

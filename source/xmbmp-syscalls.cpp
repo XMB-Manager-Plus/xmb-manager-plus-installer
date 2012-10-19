@@ -1,4 +1,4 @@
-#include "xmb-manager-syscalls.h"
+#include "xmbmp-syscalls.h"
 
 s32 lv2_get_platform_info(uint8_t platform_info[0x18])
 {
@@ -29,4 +29,3 @@ s32 lv2_get_target_type(uint64_t *type)
 	lv2syscall1(985, (uint64_t) type);
 	return_to_user_prog(s32);
 }
-

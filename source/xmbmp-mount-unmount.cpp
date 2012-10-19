@@ -1,4 +1,4 @@
-#include "xmb-manager-mount-unmount.h"
+#include "xmbmp-mount-unmount.h"
 
 int is_dev_blind_mounted()
 {
