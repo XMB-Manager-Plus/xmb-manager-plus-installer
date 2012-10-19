@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <io/pad.h>
-#include <NoRSX.h> //Image, as all the other functions, is already included inside NoRSX header
+#include <NoRSX.h> 
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -15,12 +15,18 @@
 #include <errno.h>
 #include <zlib.h>
 
+#include "xmb-manager-mount-unmount.h"
+#include "xmb-manager-debug.h"
+#include "xmb-manager-file.h"
+
+//#include "xmb-manager-.h"
+
+
 #define MAX_BUFFERS 2
 #define CHUNK 16384
 using namespace std;
 
 //global vars
-string mainfolder;
 string fw_version="";
 string ttype="";
 string menu1[99];
@@ -31,35 +37,12 @@ string menu2_path[99][99];
 int menu2_size[99];
 string menu3[99];
 int menu3_size=0;
-NoRSX *Graphics = new NoRSX(RESOLUTION_1920x1080);
-Background B1(Graphics);
-Font F1(LATIN2, Graphics);
-Font F2(LATIN2, Graphics);
-MsgDialog Mess(Graphics);
-msgType MSG_OK = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
-msgType MSG_ERROR = (msgType)(MSG_DIALOG_ERROR | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
-msgType MSG_YESNO_DNO = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO | MSG_DIALOG_DEFAULT_CURSOR_NO);
-msgType MSG_YESNO_DYES = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_YESNO);
 
 //headers
-s32 lv2_get_platform_info(uint8_t platform_info[0x18]);
-s32 sysFsMount(const char* MOUNT_POINT, const char* TYPE_OF_FILESYSTEM, const char* PATH_TO_MOUNT, int IF_READ_ONLY);
-s32 sysFsUnmount(const char* PATH_TO_UNMOUNT);
-u32 reboot_sys();
-s32 lv2_get_target_type(uint64_t *type);
-int is_dev_blind_mounted();
-int mount_dev_blind();
-int unmount_dev_blind();
-void debug_print(string text);
-string convert_size(double size, string format);
-double get_free_space(const char *path);
-double get_filesize(const char *path);
-string create_file(const char* cpath);
-int exists(const char *path);
+
 const string fileCreatedDateTime(const char *path);
 const string currentDateTime();
-s32 create_dir(string dirtocreate);
-string recursiveDelete(string direct);
+
 s32 center_text_x(int fsize, const char* message);
 string int_to_string(int number);
 void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize);
@@ -73,131 +56,9 @@ int restore(string foldername);
 int install(string firmware_choice, string app_choice);
 int delete_all();
 int delete_one(string foldername, string type);
-int show_terms();
-int main(s32 argc, char* argv[]);
+
 
 //functions
-s32 lv2_get_platform_info(uint8_t platform_info[0x18])
-{
-	lv2syscall1(387, (uint64_t) platform_info);
-	return_to_user_prog(s32);
-}
-
-s32 sysFsMount(const char* MOUNT_POINT, const char* TYPE_OF_FILESYSTEM, const char* PATH_TO_MOUNT, int IF_READ_ONLY)
-{
-	lv2syscall8(837, (u64)MOUNT_POINT, (u64)TYPE_OF_FILESYSTEM, (u64)PATH_TO_MOUNT, 0, IF_READ_ONLY, 0, 0, 0);
-	return_to_user_prog(s32);
-}
-
-s32 sysFsUnmount(const char* PATH_TO_UNMOUNT)
-{
-	lv2syscall1(838, (u64)PATH_TO_UNMOUNT);
-	return_to_user_prog(s32);
-}
-
-u32 reboot_sys()
-{ 
-	lv2syscall4(379,0x200,0,0,0);
-	return_to_user_prog(u32);
-}
-
-s32 lv2_get_target_type(uint64_t *type)
-{
-	lv2syscall1(985, (uint64_t) type);
-	return_to_user_prog(s32);
-}
-
-int is_dev_blind_mounted()
-{
-	const char* MOUNT_POINT = "/dev_blind"; //our mount point
-	sysFSStat dir;
-
-	return sysFsStat(MOUNT_POINT, &dir);
-}
-
-int mount_dev_blind()
-{
-	const char* DEV_BLIND = "CELL_FS_IOS:BUILTIN_FLSH1";	// dev_flash
-	const char* FAT = "CELL_FS_FAT"; //it's also for fat32
-	const char* MOUNT_POINT = "/dev_blind"; //our mount point
-
-	sysFsMount(DEV_BLIND, FAT, MOUNT_POINT, 0);
-
-	return 0;
-}
-
-int unmount_dev_blind()
-{
-	const char* MOUNT_POINT = "/dev_blind"; //our mount point
-
-	sysFsUnmount(MOUNT_POINT);
-
-	return 0;
-}
-
-void debug_print(string text)
-{
-	B1.Mono(COLOR_BLACK);
-	F1.Printf(100, 100,0xffffff,20, "%s", text.c_str());
-	Graphics->Flip();
-	sleep(10);
-}
-
-string convert_size(double size, string format)
-{
-	char str[100];
-
-	if (format=="auto")
-	{
-		if (size >= 1073741824) format="GB";
-		else if (size >= 1048576) format="MB";
-		else format="KB";
-	}
-	if (format=="KB") size = size / 1024.00; // convert to KB
-	else if (format=="MB") size = size / 1048576.00; // convert to MB
-	else if (format=="GB") size = size / 1073741824.00; // convert to GB
-	if (format=="KB") sprintf(str, "%.2fKB", size);
-	else if (format=="MB") sprintf(str, "%.2fMB", size);
-	else if (format=="GB") sprintf(str, "%.2fGB", size);
-
-	return str;
-}
-
-double get_free_space(const char *path)
-{
-	uint32_t block_size;
-	uint64_t free_block_count;
-
-	sysFsGetFreeSize(path, &block_size, &free_block_count);
-	return (((uint64_t) block_size * free_block_count));
-}
-
-double get_filesize(const char *path)
-{
-	sysFSStat info;
-
-	if (sysFsStat(path, &info) >= 0) return (double)info.st_size;
-	else return 0;
-}
-
-string create_file(const char* cpath)
-{
-  FILE *path;
-
-  /* open destination file */
-  if((path = fopen(cpath, "wb"))==NULL) return "Cannot open file ("+(string)cpath+") for writing!";
-  if(fclose(path)==EOF) return "Cannot close file ("+(string)cpath+")!";
-
-  return "";
-}
-
-int exists(const char *path)
-{
-	sysFSStat info;
-
-	if (sysFsStat(path, &info) >= 0) return 1;
-	return 0;
-}
 
 const string fileCreatedDateTime(const char *path)
 {
@@ -226,46 +87,6 @@ const string currentDateTime()
     strftime(buf, sizeof(buf), "%Y-%m-%d %Hh%Mm%Ss", &tstruct);
 
     return buf;
-}
-
-s32 create_dir(string dirtocreate)
-{
-	return mkdir(dirtocreate.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-}
-
-string recursiveDelete(string direct)
-{
-	string dfile;
-	DIR *dp;
-	struct dirent *dirp;
-
-	dp = opendir (direct.c_str());
-	if (dp != NULL)
-	{
-		while ((dirp = readdir (dp)))
-		{
-			dfile = direct + "/" + dirp->d_name;
-			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
-			{
-				//Mess.Dialog(MSG_OK,("Testing: "+dfile).c_str());
-				if (dirp->d_type == DT_DIR)
-				{
-					//Mess.Dialog(MSG_OK,("Is directory: "+dfile).c_str());
-					recursiveDelete(dfile);
-				}
-				else
-				{
-					//Mess.Dialog(MSG_OK,("Deleting file: "+dfile).c_str());
-					if ( sysFsUnlink(dfile.c_str()) != 0) return "Couldn't delete file "+dfile+"\n"+strerror(errno);
-				}
-			}
-		}
-		(void) closedir (dp);
-	}
-	else return "Couldn't open the directory";
-	//Mess.Dialog(MSG_OK,("Deleting folder: "+direct).c_str());
-	if ( rmdir(direct.c_str()) != 0) return "Couldn't delete directory "+direct+"\n"+strerror(errno);
-	return "";
 }
 
 s32 center_text_x(int fsize, const char* message)
@@ -485,6 +306,7 @@ string *recursiveListing(string direct)
 						//Mess.Dialog(MSG_OK,("file: "+listed_file_names[aindex]).c_str());
 						i++;
 						aindex++;
+						Graphics->Flip();
 					}
 					//Mess.Dialog(MSG_OK,("Dir: "+dfile+" "+int_to_string(i)).c_str());
 				}
@@ -495,6 +317,7 @@ string *recursiveListing(string direct)
 					aindex++;
 				}
 			}
+			Graphics->Flip();
 		}
 		closedir(dp);
 	}
@@ -560,6 +383,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 					if (ret != "") return ret;
 				}*/
 			}
+			Graphics->Flip();
 		}
 		closedir(dp);
 		title="Backing up files ...";
@@ -578,6 +402,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 				if (dest_paths[findex].find("dev_blind")!=string::npos) mountblind=1;
 				findex++;
 			}
+			Graphics->Flip();
 		}
 		closedir(dp);
 		title="Restoring files ...";
@@ -597,6 +422,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 				findex++;
 			}
 			//check zip files
+			Graphics->Flip();
 		}
 		closedir(dp);
 		title="Copying files ...";
@@ -638,6 +464,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 				numfiles_total+=1;
 			}
 			i++;
+			Graphics->Flip();
 		}
 	}
 
@@ -665,6 +492,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 					sourcefile=dest.substr(0, pos+1);
 					//Mess.Dialog(MSG_OK,("folder: "+sourcefile+" "+int_to_string(pos)+" "+int_to_string((int)dest.size()-1)).c_str());
 					if (exists(sourcefile.c_str())!=1) create_dir(sourcefile);
+					Graphics->Flip();
 				}
 				while (pos != dest.size()-1);
 			}
@@ -674,6 +502,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 		copy_currentsize+=source_size;
 		numfiles_current+=1;
 		i++;
+		Graphics->Flip();
 	}
 
 	//check files
@@ -692,6 +521,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 		copy_currentsize+=source_size;
 		numfiles_current+=1;
 		i++;
+		Graphics->Flip();
 	}
 
 	return "";
@@ -771,7 +601,8 @@ void draw_menu(int menu_id, int selected,int choosed, int menu1_position)
 int restore(string foldername)
 {
 	string ret="";
-	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\n"
+			"If you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	
 	Mess.Dialog(MSG_YESNO_DYES,("Are you sure you want to restore '"+foldername+"' backup?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
@@ -791,7 +622,8 @@ int restore(string foldername)
 		}
 		else //problem in the restore process so emit a warning
 		{
-			Mess.Dialog(MSG_ERROR,("Backup '"+foldername+"' has not restored! A error occured while restoring the backup!\n\nError: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
+			Mess.Dialog(MSG_ERROR,("Backup '"+foldername+"' has not restored! A error occured while restoring the backup!\n\n"
+						"Error: "+ret+"\n\nTry to restore again manually, if the error persists, your system may be corrupted, please check all files and if needed reinstall firmare from XMB or recovery menu.").c_str());
 		}
 	}
 
@@ -801,7 +633,8 @@ int restore(string foldername)
 int install(string firmware_folder, string app_choice)
 {
 	string ret="";
-	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\n"
+			"If you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	string foldername=currentDateTime()+" Before "+app_choice;
 
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to install '"+app_choice+"'?"+problems).c_str());
@@ -855,7 +688,8 @@ int delete_all()
 		}
 		else //problem in the delete process so emit a warning
 		{
-			Mess.Dialog(MSG_ERROR,("Backup folders were not deleted! A error occured while deleting the folders!\n\nError: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
+			Mess.Dialog(MSG_ERROR,("Backup folders were not deleted! A error occured while deleting the folders!\n\n"
+						"Error: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
 		}
 	}
 	return 0;
@@ -878,26 +712,11 @@ int delete_one(string foldername, string type)
 		}
 		else //problem in the delete process so emit a warning
 		{
-			Mess.Dialog(MSG_ERROR,("A error occured while deleting the "+type+" '"+foldername+"'!\n\nError: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
+			Mess.Dialog(MSG_ERROR,("A error occured while deleting the "+type+" '"+foldername+"'!\n\n"
+						"Error: "+ret+"\n\nTry to delete again manually, if the error persists, try other software to delete this folders.").c_str());
 		}
 	}
 	return 0;
-}
-
-int show_terms()
-{
-	if (exists((mainfolder+"/terms-accepted.cfg").c_str())!=1)//terms not yet accepted
-	{
-		Mess.Dialog(MSG_OK,"Permission is hereby granted, FREE of charge, to any person obtaining a copy of this software and associated configuration files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, publish, distribute, sublicense, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.");
-		Mess.Dialog(MSG_YESNO_DYES,"THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\nDo you accept this terms?");
-		if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
-		{
-			create_file((mainfolder+"/terms-accepted.cfg").c_str());
-			return 1;
-		}
-		else return 0;
-	}
-	return 1;
 }
 
 int main(s32 argc, char* argv[])
@@ -1004,6 +823,7 @@ int main(s32 argc, char* argv[])
 						ifw++;
 					}
 				}
+				Graphics->Flip();
 			}
 			closedir(dp2);
 			if (ifw!=0) //has apps for the current firmware version
@@ -1015,6 +835,7 @@ int main(s32 argc, char* argv[])
 				iapp++;
 			}
 		}
+		Graphics->Flip();
 	}
 	closedir(dp);
 
@@ -1042,6 +863,7 @@ int main(s32 argc, char* argv[])
 		if (menu1_position==menu1_size-2) menu1_position--;
 	}
 	else menu1_restore=1;
+
 	draw_menu(1,menu1_position,-1,0);
 	while (Graphics->GetAppStatus())
 	{
@@ -1157,6 +979,7 @@ int main(s32 argc, char* argv[])
 			menu3[menu3_size]=dirp->d_name;
 			menu3_size++;
 		}
+		Graphics->Flip();
 	}
 	closedir(dp);
 	menu3[menu3_size]="DELETE all backups";
@@ -1228,6 +1051,7 @@ int main(s32 argc, char* argv[])
 
 	end:
 	{
+		Mess.Dialog(MSG_OK,"Exiting..");
 		Graphics->AppExit();
 		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 		Graphics->NoRSX_Exit();
