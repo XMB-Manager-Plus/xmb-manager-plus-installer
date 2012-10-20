@@ -60,28 +60,32 @@ int unmount_dev_blind()
 
 string get_firmware_info(string what)
 {
-	uint8_t platform_info[0x18];
-	lv2_get_platform_info(platform_info);
-	uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
-	uint64_t targettype;
-	lv2_get_target_type(&targettype);
-	string type, fwvers;
+	string result="";
 
-	//check if current version is supported
-	if (targettype==1) type="CEX";
-	else if (targettype==2) type="DEX";
-	else if (targettype==3) type="DECR";
-	else type="Unknown";
-	if (fw==0x40250) fwvers="4.25";
-	else if (fw==0x40210) fwvers="4.21";
-	else if (fw==0x40200) fwvers="4.20";
-	else if (fw==0x40110) fwvers="4.11";
-	else if (fw==0x30560) fwvers="3.56";
-	else if (fw==0x30550) fwvers="3.55";
-	else if (fw==0x30410) fwvers="3.41";
-	else if (fw==0x30150) fwvers="3.15";
-	else fwvers="0.00";
+	if (what=="version")
+	{
+		uint8_t platform_info[0x18];
+		lv2_get_platform_info(platform_info);
+		uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
+		if (fw==0x40250) result="4.25";
+		else if (fw==0x40210) result="4.21";
+		else if (fw==0x40200) result="4.20";
+		else if (fw==0x40110) result="4.11";
+		else if (fw==0x30560) result="3.56";
+		else if (fw==0x30550) result="3.55";
+		else if (fw==0x30410) result="3.41";
+		else if (fw==0x30150) result="3.15";
+		else result="0.00";
+	}
+	if (what=="type")
+	{
+		uint64_t targettype;
+		lv2_get_target_type(&targettype);
+		if (targettype==1) result="CEX";
+		else if (targettype==2) result="DEX";
+		else if (targettype==3) result="DECR";
+		else result="Unknown";
+	}
 
-	if (what=="version") return fwvers;
-	else return type;
+	return result;
 }
