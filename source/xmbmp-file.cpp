@@ -260,7 +260,7 @@ int show_terms(string folder)
 	}
 	return 0;
 }
-
+/*
 void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
 {
 	int sizeTitleFont = 40, sizeFont = 25;
@@ -275,16 +275,22 @@ void draw_copy(string title, const char *dirfrom, const char *dirto, const char 
 	F2.Printf(center_text_x(sizeFont, current.c_str()), 410, COLOR_WHITE, sizeFont, "%s", current.c_str());
 	Graphics->Flip();
 }
-
+*/
 string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag)
 {
 	string cfrom=(string)dirfrom+(string)filename;
 	string ctoo=(string)dirto+(string)filename;
 	FILE *from, *to;
 	char buf[CHUNK], buf2[CHUNK]; // BUFSIZE default is 8192 bytes
-	size_t size=0, countsize=0;
-	time_t start, now;
+	size_t size=0;
+	//time_t start, now;
 	string ret="";
+	double percent=0, oldpercent=0, changepercent=0, current_copy_size=0;
+	string current;
+	string sfilename=(string)filename;
+	string scurrent_files=int_to_string(numfiles_current);
+	string stotal_files=int_to_string(numfiles_total);
+	string stotal_size=convert_size(copy_totalsize, "auto");
 
 	if ((from = fopen(cfrom.c_str(), "rb"))==NULL) return "Cannot open source file ("+cfrom+") for reading!";
 	if (check_flag==1)
@@ -292,33 +298,37 @@ string copy_file(string title, const char *dirfrom, const char *dirto, const cha
 		if ((to = fopen(ctoo.c_str(), "rb"))==NULL) return "Cannot open destination file ("+ctoo+") for reading!";
 	}
 	else if ((to = fopen(ctoo.c_str(), "wb"))==NULL) return "Cannot open destination file ("+ctoo+") for writing!";
-	draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
-	start = time(NULL);
-	time(&start);
+	//draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
+	//start = time(NULL);
+	//time(&start);
 	while(!feof(from))
 	{
-		draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
-		size = fread(buf, 1, 8192, from);
-		if(ferror(from))  return "Error reading source file ("+cfrom+")!";
+		//draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
+		size = fread(buf, 1, CHUNK, from);
+		if(ferror(from)) return "Error reading source file ("+cfrom+")!";
 		if (check_flag==1)
 		{
-			size = fread(buf2, 1, 8192, to);
+			size = fread(buf2, 1, CHUNK, to);
 			if (ferror(to)) return "Error reading destination file ("+ctoo+")!";
-			if (memcmp(buf, buf2, 8192)!=0) return "Source and destination files are different!";
+			if (memcmp(buf, buf2, CHUNK)!=0) return "Source and destination files are different!";
 		}
 		else
 		{
 			fwrite(buf, 1, size, to);
 			if (ferror(to)) return "Error writing destination file ("+ctoo+")!";
 		}
-		countsize=countsize+size;
-		now = time(NULL);
-		time(&now);
-		if (difftime(now,start)>=1)
+		current_copy_size=current_copy_size+(double)size;
+		percent=(copy_currentsize+current_copy_size)/copy_totalsize*100;
+		changepercent=percent-oldpercent;
+		current="Processing "+scurrent_files+" of "+stotal_files+" files ("+convert_size(copy_currentsize+current_copy_size, "auto")+"/"+stotal_size+")";
+		//PF.printf((title+" "+int_to_string((int)percent)+"p "+current+" \r\n").c_str());
+		Mess.SingleProgressBarDialogChangeMessage(current.c_str());
+		Mess.ProgressBarDialogFlip();
+		if (changepercent>1)
 		{
-			draw_copy(title, dirfrom, dirto, filename, cfrom, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total, countsize);
-			start = time(NULL);
-			time(&start);
+			Mess.SingleProgressBarDialogIncrease(changepercent);
+			Mess.ProgressBarDialogFlip();
+			oldpercent=percent-(changepercent-(int)changepercent);
 		}
 	}
 

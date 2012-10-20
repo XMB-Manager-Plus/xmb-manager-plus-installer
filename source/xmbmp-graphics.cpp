@@ -7,6 +7,7 @@ Bitmap BMap(Graphics);
 Font F1(LATIN2, Graphics);
 Font F2(LATIN2, Graphics);
 MsgDialog Mess(Graphics);
+Printf PF("/dev_usb000/xmbmanpls_log.txt");
 
 msgType MSG_OK = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
 msgType MSG_ERROR = (msgType)(MSG_DIALOG_ERROR | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
@@ -31,6 +32,5 @@ void make_background(string version, string type, string folder)
 	u32 imgX =(Graphics->width/2)-(png.width/2), imgY = 30;
 	I1.AlphaDrawIMGtoBitmap(imgX,imgY,&png,&Precalculated_Layer);
 	F2.PrintfToBitmap(center_text_x(sizeFont, "Firmware: X.XX (CEX)"),Graphics->height-(sizeFont+20+(sizeFont-5)+10),&Precalculated_Layer,0xc0c0c0,sizeFont, "Firmware: %s (%s)", version.c_str(), type.c_str());
-	F2.PrintfToBitmap(center_text_x(sizeFont-5, "Installer created by XMBM+ Team"),Graphics->height-((sizeFont-5)+10),&Precalculated_Layer,0xd38900,sizeFont-5,     "Installer created by XMBM+ Team");
+	F2.PrintfToBitmap(center_text_x(sizeFont-5, "Installer created by XMBM+ Team"),Graphics->height-((sizeFont-5)+10),&Precalculated_Layer,0xd38900,sizeFont-5, "Installer created by XMBM+ Team");
 }
-

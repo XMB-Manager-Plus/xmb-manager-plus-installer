@@ -12,6 +12,7 @@ extern Background B1;
 extern Font F1;
 extern Font F2;
 extern MsgDialog Mess;
+extern Printf PF;
 
 extern msgType MSG_OK;
 extern msgType MSG_ERROR;

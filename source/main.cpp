@@ -6,7 +6,7 @@
 #include <time.h>
 #include <zlib.h>
 
-#define MAX_OPTIONS 10
+#define MAX_OPTIONS 100
 
 //global vars
 string mainfolder;
@@ -51,7 +51,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 {
 	DIR *dp;
 	struct dirent *dirp;
-	int findex=0, mountblind=0, numfiles_total=0, numfiles_current=0, j=0, i=0;
+	int findex=0, mountblind=0, numfiles_total=0, numfiles_current=1, j=0, i=0;
 	double copy_totalsize=0, copy_currentsize=0, source_size=0, dest_size=0, freespace_size=0;
 	string source_paths[100], dest_paths[100], check_paths[100];
 	string check_path, sourcefile, destfile, filename, dest, source, title;
@@ -75,11 +75,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 					if (source_paths[findex].find("dev_blind")!=string::npos) mountblind=1;
 					findex++;
 				}
-				/*else if (dirp->d_type == DT_REG && dirp->d_name.find(".zip")!=string::npos)//check zip files
-				{
-					ret=string z_inflate(FILE *source, FILE *dest);
-					if (ret != "") return ret;
-				}*/
+				//check zip files
 			}
 		}
 		closedir(dp);
@@ -164,45 +160,68 @@ string doit(string operation, string foldername, string fw_folder, string app)
 
 	//copy files
 	i=0;
+	Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
 	while (strcmp(final_list_source[i].c_str(),"") != 0)
 	{
 		sourcefile=final_list_source[i];
 		destfile=final_list_dest[i];
+		source_size=get_filesize(sourcefile.c_str());
+		dest_size=get_filesize(destfile.c_str());
 		filename=final_list_source[i].substr(final_list_source[i].find_last_of("/")+1);
 		source=final_list_source[i].substr(0,final_list_source[i].find_last_of("/")+1);
 		dest=final_list_dest[i].substr(0,final_list_dest[i].find_last_of("/")+1);
-		source_size=get_filesize(sourcefile.c_str());
-		dest_size=get_filesize(destfile.c_str());
 		freespace_size=get_free_space(dest.c_str())+dest_size;
-		if (source_size >= freespace_size) return "Not enough space to copy the file ("+filename+") to destination path ("+dest+").";
+		if (source_size >= freespace_size)
+		{
+			Mess.ProgressBarDialogAbort();
+			return "Not enough space to copy the file ("+filename+") to destination path ("+dest+").";
+		}
 		else
 		{
-			if (mkdir_full(dest)!=0) return "Could not create directory ("+dest+").";
+			if (mkdir_full(dest)!=0)
+			{
+				Mess.ProgressBarDialogAbort();
+				return "Could not create directory ("+dest+").";
+			}
 			ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(), copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,0);
-			if (ret != "") return ret;
+			if (ret != "")
+			{
+				Mess.ProgressBarDialogAbort();
+				return ret;
+			}
 		}
-		copy_currentsize+=source_size;
-		numfiles_current+=1;
+		copy_currentsize=copy_currentsize+source_size;
+		numfiles_current++;
 		i++;
 	}
+	Mess.ProgressBarDialogAbort();
 
 	//check files
 	i=0;
 	copy_currentsize=0;
-	numfiles_current=0;
+	numfiles_current=1;
+	title="Checking files ...";
+	Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
 	while (strcmp(final_list_source[i].c_str(),"") != 0)
 	{
 		sourcefile=final_list_source[i];
 		destfile=final_list_dest[i];
+		source_size=get_filesize(sourcefile.c_str());
+		dest_size=get_filesize(destfile.c_str());
 		filename=final_list_source[i].substr(final_list_source[i].find_last_of("/")+1);
 		source=final_list_source[i].substr(0,final_list_source[i].find_last_of("/")+1);
 		dest=final_list_dest[i].substr(0,final_list_dest[i].find_last_of("/")+1);
-		ret=copy_file("Checking files ...", source.c_str(), dest.c_str(), filename.c_str(), copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,1);
-		if (ret != "") return ret;
-		copy_currentsize+=source_size;
-		numfiles_current+=1;
+		ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(), copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,1);
+		if (ret != "")
+		{
+			Mess.ProgressBarDialogAbort();
+			return ret;
+		}
+		copy_currentsize=copy_currentsize+source_size;
+		numfiles_current++;
 		i++;
 	}
+	Mess.ProgressBarDialogAbort();
 
 	return "";
 }
@@ -210,7 +229,7 @@ string doit(string operation, string foldername, string fw_folder, string app)
 int restore(string foldername)
 {
 	string ret="";
-	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	
 	Mess.Dialog(MSG_YESNO_DYES,("Are you sure you want to restore '"+foldername+"' backup?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
@@ -240,7 +259,7 @@ int restore(string foldername)
 int install(string firmware_folder, string app_choice)
 {
 	string ret="";
-	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
+	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
 	string foldername=currentDateTime()+" Before "+app_choice;
 
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to install '"+app_choice+"'?"+problems).c_str());
@@ -281,7 +300,7 @@ int install(string firmware_folder, string app_choice)
 int delete_all()
 {
 	string ret="";
-	string problems="\n\nPlease DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.";
+	string problems="\n\nPlease DON'T TURN OFF YOUR PS3 while the process in running.";
 
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to delete all backups?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
@@ -303,7 +322,7 @@ int delete_all()
 int delete_one(string foldername, string type)
 {
 	string ret="";
-	string problems="\n\nPlease DON'T TURN OFF YOUR PS3 and DON'T GO TO GAME MENU while the process in running.";
+	string problems="\n\nPlease DON'T TURN OFF YOUR PS3 while the process in running.";
 
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to delete the "+type+" '"+foldername+"'?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
@@ -353,9 +372,9 @@ int make_menu_to_array(int whatmenu, string vers, string type)
 						string app_fwv=fwfolder.substr(0,fwfolder.find("-"));
 						string app_fwt=fwfolder.substr(app_fwv.size()+1,fwfolder.rfind("-")-app_fwv.size()-1);
 						string app_fwc=fwfolder.substr(app_fwv.size()+1+app_fwt.size()+1);
-						//Mess.Dialog(MSG_OK,(app_fwv+"|"+app_fwt+"|"+app_fwc).c_str());
 						if ((strcmp(app_fwv.c_str(), vers.c_str())==0 || strcmp(app_fwv.c_str(), "All")==0) && (strcmp(app_fwt.c_str(), type.c_str())==0 || strcmp(app_fwt.c_str(), "All")==0))
 						{
+							//Mess.Dialog(MSG_OK,(app_fwv+"-"+vers+"||"+app_fwt+"-"+type+"||"+app_fwc).c_str());
 							menu2[iapp][ifw]=app_fwc;
 							menu2_path[iapp][ifw]=dirp2->d_name;
 							ifw++;
@@ -380,6 +399,7 @@ int make_menu_to_array(int whatmenu, string vers, string type)
 			iapp++;
 			menu1[iapp]="Exit to XMB";
 			iapp++;
+			menu1[iapp]="\0";
 		}
 	}
 	if (whatmenu==3 || whatmenu==0)
@@ -405,6 +425,7 @@ int make_menu_to_array(int whatmenu, string vers, string type)
 				ibackup++;
 				menu3[ibackup]="Back to main menu";
 				ibackup++;
+				menu3[ibackup]="\0";
 			}
 			else recursiveDelete(direct);
 		}
@@ -476,8 +497,8 @@ void draw_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos,
 	//F1.Printf(50,250,COLOR_RED,30,"Menu 1 position: %d", menu1_pos);
 	//F1.Printf(50,300,COLOR_RED,30,"Restore option: %d", menu1_restore);
 	Graphics->Flip();
-	if (menu_color==COLOR_RED) sleep(0.7);
-	//else if (menu_color==COLOR_YELLOW) sleep(0.2);
+	if (choosed==1) usleep(50*1000);
+	else usleep(1000);
 }
 
 s32 main(s32 argc, char* argv[])
@@ -488,24 +509,25 @@ s32 main(s32 argc, char* argv[])
 	string fw_version, ttype;
 	int msize=0;
 
-	init_print("/dev_usb000/xmbmanpls_log.txt"); //this will initiate the NoRSX log
+	PF.printf("Start\r\n");
+	PF.printf("Initialize pads\r\n");
 	ioPadInit(MAX_PORT_NUM); //this will initialize the controller (7= seven controllers)
-	print("Getting main folder\r\n");
+	PF.printf("Get main folder\r\n");
 	mainfolder=get_app_folder(argv[0]);
 	menu_restore=exists_backups(mainfolder);
-	print("Show terms\r\n");
+	PF.printf("Show terms\r\n");
 	if (show_terms(mainfolder)!=0) goto end;
-	print("Detecting firmware changes\r\n");
+	PF.printf("Detect firmware changes\r\n");
 	check_firmware_changes(mainfolder);
-	print("Getting firmware info\r\n");
+	PF.printf("Get firmware info\r\n");
 	fw_version=get_firmware_info("version");
 	ttype=get_firmware_info("type");
-	print("Construct menu\r\n");
+	PF.printf("Construct menu\r\n");
 	if (make_menu_to_array(0,fw_version, ttype)!=0) { Mess.Dialog(MSG_ERROR,"Problem reading folder!"); goto end; }
-	print("Test if firmware is supported\r\n");
+	PF.printf("Test if firmware is supported\r\n");
 	if (string_array_size(menu1)==0) { Mess.Dialog(MSG_ERROR,"Your firmware version is not supported."); goto end; }
+	PF.printf("Start menu\r\n");
 	make_background(fw_version, ttype, mainfolder);
-	print("Start menu\r\n");
 	Graphics->AppStart();
 	while (Graphics->GetAppStatus())
 	{
@@ -557,7 +579,7 @@ s32 main(s32 argc, char* argv[])
 							draw_menu(current_menu,msize,mpos,1,menu1_position,menu_restore);
 							if (menu1_position<msize-2)
 							{
-								if (menu2[menu1_position][0]=="All" && msize==2)
+								if (menu2[menu1_position][0]=="All" && string_array_size(menu2[menu1_position])==2)
 								{
 									temp=install(menu2_path[menu1_position][0], menu1[menu1_position]);
 									if (temp==2)
@@ -700,11 +722,10 @@ s32 main(s32 argc, char* argv[])
 
 	end:
 	{
+		PF.printf("End\r\n");
 		if (current_menu==1 && mpos==msize-1) draw_menu(current_menu,msize,mpos,0,menu1_position,menu_restore);
 		BMap.ClearBitmap(&Precalculated_Layer);
-		print("End\r\n");
 		if (is_dev_blind_mounted()==0) unmount_dev_blind();
-		end_print(); //close log
 		Graphics->NoRSX_Exit(); //This will uninit the NoRSX lib
 		ioPadEnd(); //this will uninitialize the controllers
 		if (reboot==1) reboot_sys(); //reboot
