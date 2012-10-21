@@ -6,7 +6,7 @@
 #include <time.h>
 #include <zlib.h>
 
-#define MAX_OPTIONS 100
+#define MAX_OPTIONS 20
 
 //global vars
 string mainfolder;
@@ -23,7 +23,8 @@ int install(string firmware_folder, string app_choice);
 int delete_all();
 int delete_one(string foldername, string type);
 int make_menu_to_array(int whatmenu, string vers, string type);
-void draw_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos, int menu1_restore);
+void bitmap_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos, int menu1_restore);
+
 s32 main(s32 argc, char* argv[]);
 
 const string currentDateTime()
@@ -433,20 +434,20 @@ int make_menu_to_array(int whatmenu, string vers, string type)
 	return 0;
 }
 
-void draw_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos, int menu1_restore)
+void bitmap_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos, int menu1_restore)
 {
-	int j, posy=260, sizeTitleFont = 40, sizeFont = 30;
+	int j, tposy=png.height+ypos(30)+ypos(30), posy=tposy+ypos(30), sizeTitleFont = ypos(40), sizeFont = ypos(30), spacing=ypos(4);
 	int menu_color=COLOR_WHITE;
 	string menu1_text;
 
-	BMap.DrawBitmap(&Precalculated_Layer);
+	//BMap.RegenBitmap(&Menu_Layer);
 	if (menu_id==1)
 	{
-		F1.Printf(center_text_x(sizeTitleFont, "MAIN MENU"),220, 0xd38900, sizeTitleFont, "MAIN MENU");
+		F1.PrintfToBitmap(center_text_x(sizeTitleFont, "MAIN MENU"),tposy,&Menu_Layer, 0xd38900, sizeTitleFont, "MAIN MENU");
 		for(j=0;j<msize;j++)
 		{
-			if (j<msize-2) posy=posy+sizeFont+4;
-			else posy=posy+(2*(sizeFont+4));
+			if (j<msize-2) posy=posy+sizeFont+spacing;
+			else posy=posy+(2*(sizeFont+spacing));
 			if (j==selected)
 			{
 				if (choosed==1) menu_color=COLOR_RED;
@@ -456,39 +457,39 @@ void draw_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos,
 			if (j==msize-2 && menu1_restore!=0) menu_color=COLOR_GREY;
 			if (j<msize-2) menu1_text="INSTALL "+menu1[j];
 			else menu1_text=menu1[j];
-			F2.Printf(center_text_x(sizeFont, menu1_text.c_str()),posy,menu_color,sizeFont, "%s",menu1_text.c_str());
+			F2.PrintfToBitmap(center_text_x(sizeFont, menu1_text.c_str()),posy,&Menu_Layer,menu_color,sizeFont, "%s",menu1_text.c_str());
 		}
 	}
 	else if (menu_id==2)
 	{
-		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A FIRMWARE"),220,	0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
+		F1.PrintfToBitmap(center_text_x(sizeTitleFont, "CHOOSE A FIRMWARE"),tposy,&Menu_Layer, 0xd38900, sizeTitleFont, "CHOOSE A FIRMWARE");
 		for(j=0;j<msize;j++)
 		{
-			if (j<msize-1) posy=posy+sizeFont+4;
-			else posy=posy+(2*(sizeFont+4));
+			if (j<msize-1) posy=posy+sizeFont+spacing;
+			else posy=posy+(2*(sizeFont+spacing));
 			if (j==selected)
 			{
 				if (choosed==1) menu_color=COLOR_RED;
 				else menu_color=COLOR_YELLOW;
 			}
 			else menu_color=COLOR_WHITE;
-			F2.Printf(center_text_x(sizeFont, menu2[menu1_pos][j].c_str()),posy,menu_color,sizeFont, "%s",menu2[menu1_pos][j].c_str());
+			F2.PrintfToBitmap(center_text_x(sizeFont, menu2[menu1_pos][j].c_str()),posy,&Menu_Layer,menu_color,sizeFont, "%s",menu2[menu1_pos][j].c_str());
 		}
 	}
 	else if (menu_id==3)
 	{
-		F1.Printf(center_text_x(sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),220,	0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
+		F1.PrintfToBitmap(center_text_x(sizeTitleFont, "CHOOSE A BACKUP TO RESTORE"),tposy,&Menu_Layer, 0xd38900, sizeTitleFont, "CHOOSE A BACKUP TO RESTORE");
 		for(j=0;j<msize;j++)
 		{
-			if (j<msize-2) posy=posy+sizeFont+4;
-			else posy=posy+(2*(sizeFont+4));
+			if (j<msize-2) posy=posy+sizeFont+spacing;
+			else posy=posy+(2*(sizeFont+spacing));
 			if (j==selected)
 			{
 				if (choosed==1) menu_color=COLOR_RED;
 				else menu_color=COLOR_YELLOW;
 			}
 			else menu_color=COLOR_WHITE;
-			F2.Printf(center_text_x(sizeFont, menu3[j].c_str()),posy,menu_color,sizeFont, "%s",menu3[j].c_str());
+			F2.PrintfToBitmap(center_text_x(sizeFont, menu3[j].c_str()),posy,&Menu_Layer,menu_color,sizeFont, "%s",menu3[j].c_str());
 		}
 	}
 	//For testing porposes
@@ -496,18 +497,15 @@ void draw_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos,
 	//F1.Printf(50,200,COLOR_RED,30,"Current menu position: %d/%d", selected, msize-1);
 	//F1.Printf(50,250,COLOR_RED,30,"Menu 1 position: %d", menu1_pos);
 	//F1.Printf(50,300,COLOR_RED,30,"Restore option: %d", menu1_restore);
-	Graphics->Flip();
-	if (choosed==1) usleep(50*1000);
-	else usleep(1000);
 }
 
 s32 main(s32 argc, char* argv[])
 {
 	padInfo2 padinfo2;
 	padData paddata;
-	int menu_restore=-1, menu1_position=0, menu2_position=0, menu3_position=0, mpos=0, reboot=0, temp=0, current_menu=1;
+	int menu_restore=-1, menu1_position=0, menu2_position=0, menu3_position=0, mpos=0, reboot=0, temp=0, current_menu=1, msize=0, choosed=0;
 	string fw_version, ttype;
-	int msize=0;
+	int oldmsize=msize, oldcurrentmenu=current_menu, oldmpos=mpos;
 
 	PF.printf("Start\r\n");
 	PF.printf("Initialize pads\r\n");
@@ -527,10 +525,15 @@ s32 main(s32 argc, char* argv[])
 	PF.printf("Test if firmware is supported\r\n");
 	if (string_array_size(menu1)==0) { Mess.Dialog(MSG_ERROR,"Your firmware version is not supported."); goto end; }
 	PF.printf("Start menu\r\n");
-	make_background(fw_version, ttype, mainfolder);
+	bitmap_intitalize(mainfolder);
+	bitmap_background(fw_version, ttype);
+	bitmap_menu(current_menu, string_array_size(menu1), mpos, 0, menu1_position, menu_restore);
 	Graphics->AppStart();
 	while (Graphics->GetAppStatus())
 	{
+		oldmsize=msize;
+		oldcurrentmenu=current_menu;
+		oldmpos=mpos;
 		if (current_menu==1)
 		{
 			msize=string_array_size(menu1);
@@ -546,7 +549,13 @@ s32 main(s32 argc, char* argv[])
 			msize=string_array_size(menu3);
 			mpos=menu3_position;
 		}
-		draw_menu(current_menu,msize,mpos,0,menu1_position,menu_restore);
+		if (msize!=oldmsize || current_menu!=oldcurrentmenu || mpos!=oldmpos || choosed==1)
+		{
+			bitmap_background(fw_version, ttype);
+			bitmap_menu(current_menu, msize, mpos, 0, menu1_position, menu_restore);
+			choosed=0;
+		}
+		draw_menu(choosed);
 		if (ioPadGetInfo2(&padinfo2)==0)
 		{
 			for(int i=0;i<MAX_PORT_NUM;i++)
@@ -576,7 +585,10 @@ s32 main(s32 argc, char* argv[])
 						}
 						else if (paddata.BTN_CROSS) //Install an app
 						{
-							draw_menu(current_menu,msize,mpos,1,menu1_position,menu_restore);
+							choosed=1;
+							bitmap_background(fw_version, ttype);
+							bitmap_menu(current_menu, msize, mpos, choosed, menu1_position, menu_restore);
+							draw_menu(choosed);
 							if (menu1_position<msize-2)
 							{
 								if (menu2[menu1_position][0]=="All" && string_array_size(menu2[menu1_position])==2)
@@ -606,7 +618,10 @@ s32 main(s32 argc, char* argv[])
 						{
 							if (menu1_position<msize-2)
 							{
-								draw_menu(current_menu,msize,mpos,1,menu1_position,menu_restore);
+								choosed=1;
+								bitmap_background(fw_version, ttype);
+								bitmap_menu(current_menu, msize, mpos, choosed, menu1_position, menu_restore);
+								draw_menu(choosed);
 								if (delete_one(menu1[menu1_position], "app")==1)
 								{
 									if (make_menu_to_array(1,fw_version, ttype)!=0)
@@ -633,7 +648,10 @@ s32 main(s32 argc, char* argv[])
 						}
 						else if (paddata.BTN_CROSS) //Install an app
 						{
-							draw_menu(current_menu,msize,mpos,1,menu1_position,menu_restore);
+							choosed=1;
+							bitmap_background(fw_version, ttype);
+							bitmap_menu(current_menu, msize, mpos, choosed, menu1_position, menu_restore);
+							draw_menu(choosed);
 							if (menu2_position<msize-1)
 							{
 								temp=install(menu2_path[menu1_position][menu2_position], menu1[menu1_position]);
@@ -671,7 +689,10 @@ s32 main(s32 argc, char* argv[])
 						}
 						else if (paddata.BTN_CROSS)
 						{
-							draw_menu(current_menu,msize,mpos,1,menu1_position,menu_restore);
+							choosed=1;
+							bitmap_background(fw_version, ttype);
+							bitmap_menu(current_menu, msize, mpos, choosed, menu1_position, menu_restore);
+							draw_menu(choosed);
 							if (menu3_position<msize-2) //Restore a backup
 							{
 								if (restore(menu3[menu3_position])==2)
@@ -696,7 +717,10 @@ s32 main(s32 argc, char* argv[])
 						{
 							if (menu3_position<msize-2) //Delete a backup
 							{
-								draw_menu(current_menu,msize,mpos,1,menu1_position,menu_restore);
+								choosed=1;
+								bitmap_background(fw_version, ttype);
+								bitmap_menu(current_menu, msize, mpos, choosed, menu1_position, menu_restore);
+								draw_menu(choosed);
 								if (delete_one(menu3[menu3_position], "backup")==1)
 								{
 									if (make_menu_to_array(3,fw_version, ttype)!=0)
@@ -723,8 +747,13 @@ s32 main(s32 argc, char* argv[])
 	end:
 	{
 		PF.printf("End\r\n");
-		if (current_menu==1 && mpos==msize-1) draw_menu(current_menu,msize,mpos,0,menu1_position,menu_restore);
-		BMap.ClearBitmap(&Precalculated_Layer);
+		if (choosed==1)
+		{
+			bitmap_background(fw_version, ttype);
+			bitmap_menu(current_menu, msize, mpos, 0, menu1_position, menu_restore);
+			draw_menu(0);
+		}
+		BMap.ClearBitmap(&Menu_Layer);
 		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 		Graphics->NoRSX_Exit(); //This will uninit the NoRSX lib
 		ioPadEnd(); //this will uninitialize the controllers
