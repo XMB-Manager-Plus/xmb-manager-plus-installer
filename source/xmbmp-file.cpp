@@ -247,13 +247,14 @@ void check_firmware_changes(string folder)
 
 int show_terms(string folder)
 {
-	if (exists((folder+"/terms-accepted.cfg").c_str())!=0)//terms not yet accepted
+	if (exists((folder+"/data/terms-accepted.cfg").c_str())!=0)//terms not yet accepted
 	{
-		Mess.Dialog(MSG_OK,"Permission is hereby granted, FREE of charge, to any person obtaining a copy of this software and associated configuration files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, publish, distribute, sublicense, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.");
-		Mess.Dialog(MSG_YESNO_DYES,"THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\nDo you accept this terms?");
+		Mess.Dialog(MSG_OK,"This \"software\" is provided WITHOUT ANY WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. In no event shall the author or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the \"software\" or the use of other dealings in the \"software\".");
+		Mess.Dialog(MSG_OK,"This \"software\" is a hobby project and is intended solely for educational and testing purposes, it is required that such user actions must comply with local, federal and country legislation.\nThe author, partners, and associates do not condone piracy and shall take NO responsibility, legal or otherwise implied, for any misuse of, or for any loss that may occur while using the \"software\".");
+		Mess.Dialog(MSG_YESNO_DYES,"You are solely responsible for complying with the applicable laws in your country and you must cease using this software should your actions during the \"software\" operation lead to or may lead to infringement or violation of the rights of the respective content copyright holders.\n\nDo you accept this terms?");
 		if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 		{
-			create_file((folder+"/terms-accepted.cfg").c_str());
+			create_file((folder+"/data/terms-accepted.cfg").c_str());
 			return 0;
 		}
 		else return -1;

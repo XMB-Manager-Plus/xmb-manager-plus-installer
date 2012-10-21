@@ -1,6 +1,7 @@
 #include "xmbmp-graphics.h"
 
-NoRSX *Graphics = new NoRSX(RESOLUTION_1920x1080);
+//NoRSX *Graphics = new NoRSX(RESOLUTION_1920x1080);
+NoRSX *Graphics = new NoRSX();
 Background B1(Graphics);
 NoRSX_Bitmap Precalculated_Layer;
 Bitmap BMap(Graphics);
