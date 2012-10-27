@@ -7,7 +7,7 @@
 #include <string>
 #include <algorithm>
 
-#define CHUNK 16384
+#define CHUNK 65536
 #define APP_TITLEID "XMBMANPLS"
 #define DEV_TITLEID "PS3LOAD00"
 
@@ -20,16 +20,17 @@ double get_filesize(const char *path);
 const string fileCreatedDateTime(const char *path);
 string create_file(const char* cpath);
 int exists(const char *path);
-int exists_backups(string folder);
+int exists_backups(string appfolder);
 int mkdir_one(string fullpath);
 int mkdir_full(string fullpath);
 string recursiveDelete(string direct);
 string *recursiveListing(string direct);
 string correct_path(string dpath, int what);
 string get_app_folder(char* path);
-void check_firmware_changes(string folder);
-int show_terms(string folder);
+void check_firmware_changes(string appfolder);
+int check_terms(string appfolder);
 //void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize);
-string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag);
+string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double filesize, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag);
+string copy_prepare(string appfolder, string operation, string foldername, string fw_folder, string app);
 
 #endif

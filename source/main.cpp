@@ -1,5 +1,5 @@
-#include "xmbmp-syscalls.h"
 #include "xmbmp-file.h"
+#include "xmbmp-syscalls.h"
 #include "xmbmp-graphics.h"
 //#include "xmbmp-debug.h"
 #include <io/pad.h>
@@ -9,7 +9,6 @@
 #define MAX_OPTIONS 20
 
 //global vars
-string mainfolder;
 string menu1[MAX_OPTIONS];
 string menu2[MAX_OPTIONS][MAX_OPTIONS];
 string menu2_path[MAX_OPTIONS][MAX_OPTIONS];
@@ -17,12 +16,11 @@ string menu3[MAX_OPTIONS];
 
 //headers
 const string currentDateTime();
-string doit(string operation, string foldername, string fw_folder, string app);
-int restore(string foldername);
-int install(string firmware_folder, string app_choice);
-int delete_all();
-int delete_one(string foldername, string type);
-int make_menu_to_array(int whatmenu, string vers, string type);
+int restore(string appfolder, string foldername);
+int install(string appfolder, string firmware_folder, string app_choice);
+int delete_all(string appfolder);
+int delete_one(string appfolder, string foldername, string type);
+int make_menu_to_array(string appfolder, int whatmenu, string vers, string type);
 void bitmap_menu(int menu_id, int msize, int selected, int choosed, int menu1_pos, int menu1_restore);
 
 s32 main(s32 argc, char* argv[]);
@@ -48,186 +46,7 @@ int string_array_size(string *arr)
 	return size;
 }
 
-string doit(string operation, string foldername, string fw_folder, string app)
-{
-	DIR *dp;
-	struct dirent *dirp;
-	int findex=0, mountblind=0, numfiles_total=0, numfiles_current=1, j=0, i=0;
-	double copy_totalsize=0, copy_currentsize=0, source_size=0, dest_size=0, freespace_size=0;
-	string source_paths[100], dest_paths[100], check_paths[100];
-	string check_path, sourcefile, destfile, filename, dest, source, title;
-	string *files_list = NULL, *final_list_source = NULL, *final_list_dest = NULL;  //Pointer for an array to hold the filenames.
-	string ret="";
-
-	if (operation=="backup")
-	{
-		check_path=mainfolder+"/apps/"+app+"/"+fw_folder;
-		dp = opendir (check_path.c_str());
-		if (dp == NULL) return "Cannot open directory "+check_path;
-		while ( (dirp = readdir(dp) ) )
-		{
-			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0)
-			{
-				if (dirp->d_type == DT_DIR)
-				{
-					check_paths[findex]=check_path+"/"+dirp->d_name;
-					source_paths[findex]=correct_path(dirp->d_name,2);
-					dest_paths[findex]=mainfolder+"/backups/"+foldername+"/"+dirp->d_name;
-					if (source_paths[findex].find("dev_blind")!=string::npos) mountblind=1;
-					findex++;
-				}
-				//check zip files
-			}
-		}
-		closedir(dp);
-		title="Backing up files ...";
-	}
-	else if (operation=="restore")
-	{
-		check_path=mainfolder+"/backups/"+foldername;
-		dp = opendir (check_path.c_str());
-		if (dp == NULL) return "Cannot open directory "+check_path;
-		while ( (dirp = readdir(dp) ) )
-		{
-			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
-			{
-				source_paths[findex]=check_path + "/" + dirp->d_name;
-				dest_paths[findex]=correct_path(dirp->d_name,2);
-				if (dest_paths[findex].find("dev_blind")!=string::npos) mountblind=1;
-				findex++;
-			}
-		}
-		closedir(dp);
-		title="Restoring files ...";
-	}
-	else if (operation=="install")
-	{
-		check_path=mainfolder+"/apps/"+app+"/"+fw_folder;
-		dp = opendir (check_path.c_str());
-		if (dp == NULL) return "Cannot open directory "+check_path;
-		while ( (dirp = readdir(dp) ) )
-		{
-			if ( strcmp(dirp->d_name, ".") != 0 && strcmp(dirp->d_name, "..") != 0 && strcmp(dirp->d_name, "") != 0 && dirp->d_type == DT_DIR)
-			{
-				source_paths[findex]=check_path + "/" + dirp->d_name;
-				dest_paths[findex]=correct_path(dirp->d_name,2);
-				if (dest_paths[findex].find("dev_blind")!=string::npos) mountblind=1;
-				findex++;
-			}
-			//check zip files
-		}
-		closedir(dp);
-		title="Copying files ...";
-	}
-
-	if (mountblind==1)
-	{
-		if (is_dev_blind_mounted()!=0) mount_dev_blind();
-		if (is_dev_blind_mounted()!=0) return "Dev_blind not mounted!";
-		if (exists("/dev_flash/vsh/resource/explore/xmb/xmbmp.cfg")!=0) create_file("/dev_blind/vsh/resource/explore/xmb/xmbmp.cfg");
-	}
-
-	//count files
-	final_list_source = new string[5000];
-	final_list_dest = new string[5000];
-	for(j=0;j<findex;j++)
-	{
-		if (operation=="backup") check_path=check_paths[j];
-		else check_path=source_paths[j];
-		//Mess.Dialog(MSG_OK,("check_path: "+check_path).c_str());
-		files_list=recursiveListing(check_path);
-		i=0;
-		while (strcmp(files_list[i].c_str(),"") != 0)
-		{
-			files_list[i].replace(files_list[i].find(check_path), check_path.size()+1, "");
-			sourcefile=source_paths[j]+"/"+files_list[i];
-			destfile=dest_paths[j]+"/"+files_list[i];
-			//Mess.Dialog(MSG_OK,(operation+"\nsource: "+sourcefile+"\ndest:"+destfile).c_str());
-			if (!(operation=="backup" && exists(sourcefile.c_str())!=0))
-			{
-				copy_totalsize+=get_filesize(sourcefile.c_str());
-				final_list_source[numfiles_total]=sourcefile;
-				final_list_dest[numfiles_total]=destfile;
-				filename=final_list_source[i].substr(final_list_source[i].find_last_of("/")+1);
-				source=final_list_source[i].substr(0,final_list_source[i].find_last_of("/")+1);
-				dest=final_list_dest[i].substr(0,final_list_dest[i].find_last_of("/")+1);
-				//Mess.Dialog(MSG_OK,(operation+"\nsource: "+final_list_source[numfiles_total]+"\ndest:"+final_list_dest[numfiles_total]).c_str());
-				if (dest.find("dev_blind")!=string::npos) mountblind=1;
-				numfiles_total+=1;
-			}
-			i++;
-		}
-	}
-
-	//copy files
-	i=0;
-	Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
-	while (strcmp(final_list_source[i].c_str(),"") != 0)
-	{
-		sourcefile=final_list_source[i];
-		destfile=final_list_dest[i];
-		source_size=get_filesize(sourcefile.c_str());
-		dest_size=get_filesize(destfile.c_str());
-		filename=final_list_source[i].substr(final_list_source[i].find_last_of("/")+1);
-		source=final_list_source[i].substr(0,final_list_source[i].find_last_of("/")+1);
-		dest=final_list_dest[i].substr(0,final_list_dest[i].find_last_of("/")+1);
-		freespace_size=get_free_space(dest.c_str())+dest_size;
-		if (source_size >= freespace_size)
-		{
-			Mess.ProgressBarDialogAbort();
-			return "Not enough space to copy the file ("+filename+") to destination path ("+dest+").";
-		}
-		else
-		{
-			if (mkdir_full(dest)!=0)
-			{
-				Mess.ProgressBarDialogAbort();
-				return "Could not create directory ("+dest+").";
-			}
-			ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(), copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,0);
-			if (ret != "")
-			{
-				Mess.ProgressBarDialogAbort();
-				return ret;
-			}
-		}
-		copy_currentsize=copy_currentsize+source_size;
-		numfiles_current++;
-		i++;
-	}
-	Mess.ProgressBarDialogAbort();
-
-	//check files
-	i=0;
-	copy_currentsize=0;
-	numfiles_current=1;
-	title="Checking files ...";
-	Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
-	while (strcmp(final_list_source[i].c_str(),"") != 0)
-	{
-		sourcefile=final_list_source[i];
-		destfile=final_list_dest[i];
-		source_size=get_filesize(sourcefile.c_str());
-		dest_size=get_filesize(destfile.c_str());
-		filename=final_list_source[i].substr(final_list_source[i].find_last_of("/")+1);
-		source=final_list_source[i].substr(0,final_list_source[i].find_last_of("/")+1);
-		dest=final_list_dest[i].substr(0,final_list_dest[i].find_last_of("/")+1);
-		ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(), copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,1);
-		if (ret != "")
-		{
-			Mess.ProgressBarDialogAbort();
-			return ret;
-		}
-		copy_currentsize=copy_currentsize+source_size;
-		numfiles_current++;
-		i++;
-	}
-	Mess.ProgressBarDialogAbort();
-
-	return "";
-}
-
-int restore(string foldername)
+int restore(string appfolder, string foldername)
 {
 	string ret="";
 	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change /dev_flash files so DON'T TURN OFF YOUR PS3 while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
@@ -235,7 +54,7 @@ int restore(string foldername)
 	Mess.Dialog(MSG_YESNO_DYES,("Are you sure you want to restore '"+foldername+"' backup?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=doit("restore", foldername, "", "");
+		ret=copy_prepare(appfolder, "restore", foldername, "", "");
 		if (ret == "") //restore success
 		{
 			if (is_dev_blind_mounted()==0)
@@ -257,7 +76,7 @@ int restore(string foldername)
 	return 0;
 }
 
-int install(string firmware_folder, string app_choice)
+int install(string appfolder, string firmware_folder, string app_choice)
 {
 	string ret="";
 	string problems="\n\nPlease be adviced that, depending on what you choose, this process can change dev_flash files so DON'T TURN OFF YOUR PS3 while the process in running.\n\nIf you have some corruption after copying the files or the installer quits unexpectly check all files before restarting and if possible reinstall the firmware from XMB or Recovery Menu.";
@@ -266,10 +85,10 @@ int install(string firmware_folder, string app_choice)
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to install '"+app_choice+"'?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=doit("backup", foldername, firmware_folder, app_choice);
+		ret=copy_prepare(appfolder, "backup", foldername, firmware_folder, app_choice);
 		if (ret == "") //backup success
 		{
-			ret=doit("install", "", firmware_folder, app_choice);
+			ret=copy_prepare(appfolder, "install", "", firmware_folder, app_choice);
 			if (ret == "") //copy success
 			{
 				if (is_dev_blind_mounted()==0)
@@ -285,20 +104,20 @@ int install(string firmware_folder, string app_choice)
 			else //problem in the copy process so rollback by restoring the backup
 			{
 				Mess.Dialog(MSG_ERROR,("'"+app_choice+"' has not installed! A error occured while copying files!\n\nError: "+ret+"\n\nBackup will be restored.").c_str());
-				return restore(foldername);
+				return restore(appfolder, foldername);
 			}
 		}
 		else //problem in the backup process so rollback by deleting the backup
 		{
 			Mess.Dialog(MSG_ERROR,("'"+app_choice+"' has not installed! A error occured while doing backuping the files!\n\nError: "+ret+"\n\nIncomplete backup will be deleted.").c_str());
-			if (recursiveDelete(mainfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
+			if (recursiveDelete(appfolder+"/backups/"+foldername) != "") Mess.Dialog(MSG_ERROR,("Problem while deleting the backup!\n\nError: "+ret+"\n\nTry to delete with a file manager.").c_str());
 		}
 	}
 
 	return 0;
 }
 
-int delete_all()
+int delete_all(string appfolder)
 {
 	string ret="";
 	string problems="\n\nPlease DON'T TURN OFF YOUR PS3 while the process in running.";
@@ -306,7 +125,7 @@ int delete_all()
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to delete all backups?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		ret=recursiveDelete(mainfolder+"/backups");
+		ret=recursiveDelete(appfolder+"/backups");
 		if (ret == "") //delete sucess
 		{
 			Mess.Dialog(MSG_OK,"All backups deleted!\nPress OK to continue.");
@@ -320,7 +139,7 @@ int delete_all()
 	return 0;
 }
 
-int delete_one(string foldername, string type)
+int delete_one(string appfolder, string foldername, string type)
 {
 	string ret="";
 	string problems="\n\nPlease DON'T TURN OFF YOUR PS3 while the process in running.";
@@ -328,8 +147,8 @@ int delete_one(string foldername, string type)
 	Mess.Dialog(MSG_YESNO_DNO,("Are you sure you want to delete the "+type+" '"+foldername+"'?"+problems).c_str());
 	if (Mess.GetResponse(MSG_DIALOG_BTN_YES)==1)
 	{
-		if (strcmp(type.c_str(), "backup")==0) ret=recursiveDelete(mainfolder+"/backups/"+foldername);
-		else if (strcmp(type.c_str(), "app")==0) ret=recursiveDelete(mainfolder+"/apps/"+foldername);
+		if (strcmp(type.c_str(), "backup")==0) ret=recursiveDelete(appfolder+"/backups/"+foldername);
+		else if (strcmp(type.c_str(), "app")==0) ret=recursiveDelete(appfolder+"/apps/"+foldername);
 		if (ret == "") //delete sucess
 		{
 			Mess.Dialog(MSG_OK,("The "+type+" '"+foldername+"' has been deleted!\nPress OK to continue.").c_str());
@@ -343,7 +162,7 @@ int delete_one(string foldername, string type)
 	return 0;
 }
 
-int make_menu_to_array(int whatmenu, string vers, string type)
+int make_menu_to_array(string appfolder, int whatmenu, string vers, string type)
 {
 	int ifw=0, iapp=0, ibackup=0;
 	DIR *dp, *dp2;
@@ -353,7 +172,7 @@ int make_menu_to_array(int whatmenu, string vers, string type)
 	if (whatmenu==1 || whatmenu==2 || whatmenu==0)
 	{
 		iapp=0;
-		direct=mainfolder+"/apps";
+		direct=appfolder+"/apps";
 		dp = opendir (direct.c_str());
 		if (dp == NULL) return -1;
 		while ( (dirp = readdir(dp) ) )
@@ -387,6 +206,7 @@ int make_menu_to_array(int whatmenu, string vers, string type)
 				{
 					menu2[iapp][ifw]="Back to main menu";
 					ifw++;
+					menu2[iapp][ifw]="\0";
 					menu1[iapp]=dirp->d_name;
 					iapp++;
 				}
@@ -406,8 +226,8 @@ int make_menu_to_array(int whatmenu, string vers, string type)
 	if (whatmenu==3 || whatmenu==0)
 	{
 		ibackup=0;
-		direct=mainfolder+"/backups";
-		if (exists_backups(mainfolder)==0)
+		direct=appfolder+"/backups";
+		if (exists_backups(appfolder)==0)
 		{
 			dp = opendir(direct.c_str());
 			if (dp == NULL) return -1;
@@ -504,7 +324,7 @@ s32 main(s32 argc, char* argv[])
 	padInfo2 padinfo2;
 	padData paddata;
 	int menu_restore=-1, menu1_position=0, menu2_position=0, menu3_position=0, mpos=0, reboot=0, temp=0, current_menu=1, msize=0, choosed=0;
-	string fw_version, ttype;
+	string fw_version, ttype, mainfolder;
 	int oldmsize=msize, oldcurrentmenu=current_menu, oldmpos=mpos;
 
 	PF.printf("Start\r\n");
@@ -514,14 +334,14 @@ s32 main(s32 argc, char* argv[])
 	mainfolder=get_app_folder(argv[0]);
 	menu_restore=exists_backups(mainfolder);
 	PF.printf("Show terms\r\n");
-	if (show_terms(mainfolder)!=0) goto end;
+	if (check_terms(mainfolder)!=0) goto end;
 	PF.printf("Detect firmware changes\r\n");
 	check_firmware_changes(mainfolder);
 	PF.printf("Get firmware info\r\n");
 	fw_version=get_firmware_info("version");
 	ttype=get_firmware_info("type");
 	PF.printf("Construct menu\r\n");
-	if (make_menu_to_array(0,fw_version, ttype)!=0) { Mess.Dialog(MSG_ERROR,"Problem reading folder!"); goto end; }
+	if (make_menu_to_array(mainfolder, 0,fw_version, ttype)!=0) { Mess.Dialog(MSG_ERROR,"Problem reading folder!"); goto end; }
 	PF.printf("Test if firmware is supported\r\n");
 	if (string_array_size(menu1)==0) { Mess.Dialog(MSG_ERROR,"Your firmware version is not supported."); goto end; }
 	PF.printf("Start menu\r\n");
@@ -593,7 +413,7 @@ s32 main(s32 argc, char* argv[])
 							{
 								if (menu2[menu1_position][0]=="All" && string_array_size(menu2[menu1_position])==2)
 								{
-									temp=install(menu2_path[menu1_position][0], menu1[menu1_position]);
+									temp=install(mainfolder,menu2_path[menu1_position][0], menu1[menu1_position]);
 									if (temp==2)
 									{
 										reboot=1;
@@ -601,7 +421,7 @@ s32 main(s32 argc, char* argv[])
 									}
 									else if (temp==1)
 									{ 
-										if (make_menu_to_array(3,fw_version, ttype)!=0)
+										if (make_menu_to_array(mainfolder, 3,fw_version, ttype)!=0)
 										{
 											Mess.Dialog(MSG_ERROR,"Problem reading folder!");
 											Graphics->AppExit();
@@ -622,9 +442,9 @@ s32 main(s32 argc, char* argv[])
 								bitmap_background(fw_version, ttype);
 								bitmap_menu(current_menu, msize, mpos, choosed, menu1_position, menu_restore);
 								draw_menu(choosed);
-								if (delete_one(menu1[menu1_position], "app")==1)
+								if (delete_one(mainfolder, menu1[menu1_position], "app")==1)
 								{
-									if (make_menu_to_array(1,fw_version, ttype)!=0)
+									if (make_menu_to_array(mainfolder, 1,fw_version, ttype)!=0)
 									{
 										Mess.Dialog(MSG_ERROR,"Problem reading folder!");
 										Graphics->AppExit();
@@ -654,7 +474,7 @@ s32 main(s32 argc, char* argv[])
 							draw_menu(choosed);
 							if (menu2_position<msize-1)
 							{
-								temp=install(menu2_path[menu1_position][menu2_position], menu1[menu1_position]);
+								temp=install(mainfolder, menu2_path[menu1_position][menu2_position], menu1[menu1_position]);
 								if (temp==2)
 								{
 									reboot=1;
@@ -662,7 +482,7 @@ s32 main(s32 argc, char* argv[])
 								}
 								else if (temp==1)
 								{
-									if (make_menu_to_array(3,fw_version, ttype)!=0)
+									if (make_menu_to_array(mainfolder, 3,fw_version, ttype)!=0)
 									{
 										Mess.Dialog(MSG_ERROR,"Problem reading folder!");
 										Graphics->AppExit();
@@ -695,7 +515,7 @@ s32 main(s32 argc, char* argv[])
 							draw_menu(choosed);
 							if (menu3_position<msize-2) //Restore a backup
 							{
-								if (restore(menu3[menu3_position])==2)
+								if (restore(mainfolder, menu3[menu3_position])==2)
 								{
 									reboot=1;
 									Graphics->AppExit();
@@ -703,9 +523,9 @@ s32 main(s32 argc, char* argv[])
 							}
 							else if (menu3_position<msize-1) //Delete all backups
 							{
-								if (delete_all()==1)
+								if (delete_all(mainfolder)==1)
 								{
-									make_menu_to_array(3,fw_version, ttype);
+									make_menu_to_array(mainfolder, 3,fw_version, ttype);
 									menu_restore=-1;
 									current_menu=1;
 									menu1_position++;
@@ -721,9 +541,9 @@ s32 main(s32 argc, char* argv[])
 								bitmap_background(fw_version, ttype);
 								bitmap_menu(current_menu, msize, mpos, choosed, menu1_position, menu_restore);
 								draw_menu(choosed);
-								if (delete_one(menu3[menu3_position], "backup")==1)
+								if (delete_one(mainfolder, menu3[menu3_position], "backup")==1)
 								{
-									if (make_menu_to_array(3,fw_version, ttype)!=0)
+									if (make_menu_to_array(mainfolder, 3,fw_version, ttype)!=0)
 									{
 										Mess.Dialog(MSG_ERROR,"Problem reading folder!");
 										Graphics->AppExit();

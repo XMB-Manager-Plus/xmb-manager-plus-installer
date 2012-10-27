@@ -10,7 +10,8 @@ Font F2(LATIN2, Graphics);
 Image I1(Graphics);
 pngData png;
 MsgDialog Mess(Graphics);
-Printf PF("/dev_usb000/xmbmanpls_log.txt");
+//Printf PF("/dev_usb000/log.txt");
+Printf PF("/dev_hdd0/game/XMBMANPLS/USRDIR/data/log.txt");
 
 msgType MSG_OK = (msgType)(MSG_DIALOG_NORMAL | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
 msgType MSG_ERROR = (msgType)(MSG_DIALOG_ERROR | MSG_DIALOG_BTN_TYPE_OK | MSG_DIALOG_DISABLE_CANCEL_ON);
