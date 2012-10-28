@@ -1,8 +1,17 @@
 #include "xmbmp-syscalls.h"
 
-s32 lv2_get_platform_info(uint8_t platform_info[0x18])
+struct platform_info
 {
-	lv2syscall1(387, (uint64_t) platform_info);
+	uint32_t firmare_version; //Ex: 0x03055000
+	uint8_t res1[4];
+	uint64_t platform_id;
+	uint32_t unknown;
+	uint8_t res2[4];
+};
+
+s32 lv2_get_platform_info(struct platform_info *info)
+{
+	lv2syscall1(387, (uint64_t) info);
 	return_to_user_prog(s32);
 }
 
@@ -64,20 +73,15 @@ string get_firmware_info(string what)
 
 	if (what=="version")
 	{
-		uint8_t platform_info[0x18];
-		lv2_get_platform_info(platform_info);
-		uint32_t fw = platform_info[0]* (1 << 16) + platform_info[1] *(1<<8) + platform_info[2];
-		if (fw==0x40250) result="4.25";
-		else if (fw==0x40210) result="4.21";
-		else if (fw==0x40200) result="4.20";
-		else if (fw==0x40110) result="4.11";
-		else if (fw==0x30560) result="3.56";
-		else if (fw==0x30550) result="3.55";
-		else if (fw==0x30410) result="3.41";
-		else if (fw==0x30150) result="3.15";
-		else result="0.00";
+		char buf[50];
+		struct platform_info info;
+		lv2_get_platform_info(&info);
+		sprintf(buf, "%02X", info.firmare_version);
+		result=(string)buf;
+		result.replace(result.find("0"),1,".");
+		result.replace(result.find("000"),3,"");
 	}
-	if (what=="type")
+	else if (what=="type")
 	{
 		uint64_t targettype;
 		lv2_get_target_type(&targettype);

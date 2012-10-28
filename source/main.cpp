@@ -324,7 +324,7 @@ s32 main(s32 argc, char* argv[])
 	padInfo2 padinfo2;
 	padData paddata;
 	int menu_restore=-1, menu1_position=0, menu2_position=0, menu3_position=0, mpos=0, reboot=0, temp=0, current_menu=1, msize=0, choosed=0;
-	string fw_version, ttype, mainfolder;
+	string fw_version, fw_version2, ttype, mainfolder;
 	int oldmsize=msize, oldcurrentmenu=current_menu, oldmpos=mpos;
 
 	PF.printf("Start\r\n");
@@ -337,9 +337,10 @@ s32 main(s32 argc, char* argv[])
 	if (check_terms(mainfolder)!=0) goto end;
 	PF.printf("Detect firmware changes\r\n");
 	check_firmware_changes(mainfolder);
-	PF.printf("Get firmware info\r\n");
 	fw_version=get_firmware_info("version");
+	fw_version2=get_firmware_info("version2");
 	ttype=get_firmware_info("type");
+	PF.printf(("Get firmware info "+fw_version+" "+fw_version2+" ("+ttype+")\r\n").c_str());
 	PF.printf("Construct menu\r\n");
 	if (make_menu_to_array(mainfolder, 0,fw_version, ttype)!=0) { Mess.Dialog(MSG_ERROR,"Problem reading folder!"); goto end; }
 	PF.printf("Test if firmware is supported\r\n");
