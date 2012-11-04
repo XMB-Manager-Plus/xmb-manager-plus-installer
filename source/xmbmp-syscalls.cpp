@@ -27,9 +27,13 @@ s32 sysFsUnmount(const char* PATH_TO_UNMOUNT)
 	return_to_user_prog(s32);
 }
 
-u32 reboot_sys()
-{ 
-	lv2syscall4(379,0x200,0,0,0);
+u32 reboot_sys(string reboottype)
+{
+	uint16_t op;
+
+	if (reboottype=="soft") op=0x200;
+	else op=0x1200;
+	lv2syscall4(379,op,0,0,0);
 	return_to_user_prog(u32);
 }
 

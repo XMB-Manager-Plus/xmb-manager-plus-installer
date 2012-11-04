@@ -327,24 +327,24 @@ s32 main(s32 argc, char* argv[])
 	string fw_version, ttype, mainfolder;
 	int oldmsize=msize, oldcurrentmenu=current_menu, oldmpos=mpos;
 
-	PF.printf("Start\r\n");
-	PF.printf("Initialize pads\r\n");
+	PF.printf("Starting program\r\n");
+	PF.printf("- Intializing pad control\r\n");
 	ioPadInit(MAX_PORT_NUM); //this will initialize the controller (7= seven controllers)
-	PF.printf("Get main folder\r\n");
 	mainfolder=get_app_folder(argv[0]);
 	menu_restore=exists_backups(mainfolder);
-	PF.printf("Show terms\r\n");
+	PF.printf(("- Getting main app folder: "+mainfolder+"\r\n").c_str());
+	PF.printf("- Showing terms\r\n");
 	if (check_terms(mainfolder)!=0) goto end;
-	PF.printf("Detect firmware changes\r\n");
+	PF.printf("- Detecting firmware changes\r\n");
 	check_firmware_changes(mainfolder);
 	fw_version=get_firmware_info("version");
 	ttype=get_firmware_info("type");
-	PF.printf(("Get firmware info "+fw_version+" ("+ttype+")\r\n").c_str());
-	PF.printf("Construct menu\r\n");
+	PF.printf(("- Getting firmware info "+fw_version+" ("+ttype+")\r\n").c_str());
+	PF.printf("- Constructing menu\r\n");
 	if (make_menu_to_array(mainfolder, 0,fw_version, ttype)!=0) { Mess.Dialog(MSG_ERROR,"Problem reading folder!"); goto end; }
-	PF.printf("Test if firmware is supported\r\n");
+	PF.printf("- Testing  if firmware is supported\r\n");
 	if (string_array_size(menu1)==0) { Mess.Dialog(MSG_ERROR,"Your firmware version is not supported."); goto end; }
-	PF.printf("Start menu\r\n");
+	PF.printf("Drawing menu\r\n");
 	bitmap_intitalize(mainfolder);
 	bitmap_background(fw_version, ttype);
 	bitmap_menu(current_menu, string_array_size(menu1), mpos, 0, menu1_position, menu_restore);
@@ -566,18 +566,32 @@ s32 main(s32 argc, char* argv[])
 
 	end:
 	{
-		PF.printf("End\r\n");
-		if (choosed==1)
+		PF.printf("Ending program\r\n");
+		PF.printf("- Unintializing graphics\r\n");
+		if (choosed==1 && reboot!=1)
 		{
 			bitmap_background(fw_version, ttype);
 			bitmap_menu(current_menu, msize, mpos, 0, menu1_position, menu_restore);
 			draw_menu(0);
 		}
 		BMap.ClearBitmap(&Menu_Layer);
-		if (is_dev_blind_mounted()==0) unmount_dev_blind();
 		Graphics->NoRSX_Exit(); //This will uninit the NoRSX lib
+		PF.printf("- Unintializing pad control\r\n");
 		ioPadEnd(); //this will uninitialize the controllers
-		if (reboot==1) reboot_sys(); //reboot
+		if (is_dev_blind_mounted()==0)
+		{
+			PF.printf("- Unmounting dev_blind\r\n");
+			unmount_dev_blind();
+		}
+		if (reboot==1)
+		{
+			PF.printf("- Deleting turnoff file\r\n");
+			sysFsUnlink((char*)"/dev_hdd0/tmp/turnoff");
+			PF.printf("- Rebooting system\r\n");
+			reboot_sys("soft"); //soft reboot
+			//reboot_sys("hard"); //hard reboot
+
+		}
 	}
 
 	return 0;
