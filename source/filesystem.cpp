@@ -1,6 +1,6 @@
-#include "xmbmp-file.h"
-#include "xmbmp-syscalls.h"
-#include "xmbmp-graphics.h"
+#include "filesystem.h"
+#include "syscalls.h"
+#include "graphics.h"
 
 string int_to_string(int number)
 {
@@ -262,23 +262,9 @@ int check_terms(string appfolder)
 	}
 	return 0;
 }
-/*
-void draw_copy(string title, const char *dirfrom, const char *dirto, const char *filename, string cfrom, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, size_t countsize)
-{
-	int sizeTitleFont = 40, sizeFont = 25;
-	string current;
 
-	B1.Mono(COLOR_BLACK);
-	F1.Printf(center_text_x(sizeTitleFont, title.c_str()),220, 0xd38900, sizeTitleFont, title.c_str());
-	F2.Printf(100, 260, COLOR_WHITE, sizeFont, "Filename: %s", ((string)filename+" ("+convert_size(get_filesize(cfrom.c_str()), "auto").c_str()+")").c_str());
-	F2.Printf(100, 320, COLOR_WHITE, sizeFont, "From: %s", dirfrom);
-	F2.Printf(100, 350, COLOR_WHITE, sizeFont, "To: %s", dirto);
-	current=convert_size(copy_currentsize+(double)countsize, "auto")+" of "+convert_size(copy_totalsize, "auto").c_str()+" copied ("+int_to_string(numfiles_current).c_str()+" of "+int_to_string(numfiles_total).c_str()+" files)";
-	F2.Printf(center_text_x(sizeFont, current.c_str()), 410, COLOR_WHITE, sizeFont, "%s", current.c_str());
-	Graphics->Flip();
-}
-*/
-string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double filesize, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag)
+
+string copy_file(string title, const char *dirfrom, const char *dirto, const char *filename, double filesize, double copy_currentsize, double copy_totalsize, int numfiles_current, int numfiles_total, int check_flag, int showprogress)
 {
 	string cfrom=(string)dirfrom+(string)filename;
 	string ctoo=(string)dirto+(string)filename;
@@ -308,19 +294,24 @@ string copy_file(string title, const char *dirfrom, const char *dirto, const cha
 			if(ferror(from)) return "Error reading source file ("+cfrom+")!";
 			fwrite(buf, 1, size, to);
 			if (ferror(to)) return "Error writing destination file ("+ctoo+")!";
-			current_copy_size=current_copy_size+(double)size;
-			percent=(copy_currentsize+current_copy_size)/copy_totalsize*100;
-			changepercent=percent-oldpercent;
-			current="Processing "+scurrent_files+" of "+stotal_files+" files ("+convert_size(copy_currentsize+current_copy_size, "auto")+"/"+stotal_size+")";
-			PF.printf((" "+int_to_string((int)percent)+"%% "+current+" \r\n").c_str());
-			Mess.ProgressBarDialogFlip();
-			if (changepercent>1)
+			
+			if (showprogress==0)
 			{
-				Mess.SingleProgressBarDialogChangeMessage(current.c_str());
+				current_copy_size=current_copy_size+(double)size;
+				percent=(copy_currentsize+current_copy_size)/copy_totalsize*100;
+				changepercent=percent-oldpercent;
+				current="Processing "+scurrent_files+" of "+stotal_files+" files ("+convert_size(copy_currentsize+current_copy_size, "auto")+"/"+stotal_size+")";
+				//PF.printf((" "+int_to_string((int)percent)+"%% "+current+" \r\n").c_str());
+				//PF.printf((" change"+int_to_string((int)changepercent)+"%% real"+int_to_string((int)percent)+"%% "+current+" \r\n").c_str());
 				Mess.ProgressBarDialogFlip();
-				Mess.SingleProgressBarDialogIncrease(changepercent);
-				Mess.ProgressBarDialogFlip();
-				oldpercent=percent-(changepercent-(int)changepercent);
+				if (changepercent>1)
+				{
+					Mess.SingleProgressBarDialogChangeMessage(current.c_str());
+					Mess.ProgressBarDialogFlip();
+					Mess.SingleProgressBarDialogIncrease(changepercent);
+					Mess.ProgressBarDialogFlip();
+					oldpercent=percent-(changepercent-(int)changepercent);
+				}
 			}
 		}
 		while(!feof(from));
@@ -341,19 +332,23 @@ string copy_file(string title, const char *dirfrom, const char *dirto, const cha
 			if (size != size2) return "Source and destination files have different sizes!";
 			if (memcmp(buf, buf2, size)!=0) return "Source and destination files are different!";
 
-			current_copy_size=current_copy_size+(double)size;
-			percent=(copy_currentsize+current_copy_size)/copy_totalsize*100;
-			changepercent=percent-oldpercent;
-			current="Processing "+scurrent_files+" of "+stotal_files+" files ("+convert_size(copy_currentsize+current_copy_size, "auto")+"/"+stotal_size+")";
-			//PF.printf((" change"+int_to_string((int)changepercent)+"%% real"+int_to_string((int)percent)+"%% "+current+" \r\n").c_str());
-			Mess.ProgressBarDialogFlip();
-			if (changepercent>1)
+			if (showprogress==0)
 			{
-				Mess.SingleProgressBarDialogChangeMessage(current.c_str());
+				current_copy_size=current_copy_size+(double)size;
+				percent=(copy_currentsize+current_copy_size)/copy_totalsize*100;
+				changepercent=percent-oldpercent;
+				current="Processing "+scurrent_files+" of "+stotal_files+" files ("+convert_size(copy_currentsize+current_copy_size, "auto")+"/"+stotal_size+")";
+				//PF.printf((" "+int_to_string((int)percent)+"%% "+current+" \r\n").c_str());
+				//PF.printf((" change"+int_to_string((int)changepercent)+"%% real"+int_to_string((int)percent)+"%% "+current+" \r\n").c_str());
 				Mess.ProgressBarDialogFlip();
-				Mess.SingleProgressBarDialogIncrease((int)changepercent);
-				Mess.ProgressBarDialogFlip();
-				oldpercent=percent-(changepercent-(int)changepercent);
+				if (changepercent>1)
+				{
+					Mess.SingleProgressBarDialogChangeMessage(current.c_str());
+					Mess.ProgressBarDialogFlip();
+					Mess.SingleProgressBarDialogIncrease((int)changepercent);
+					Mess.ProgressBarDialogFlip();
+					oldpercent=percent-(changepercent-(int)changepercent);
+				}
 			}
 		}
 		while(!feof(from) || !feof(to));
@@ -371,7 +366,7 @@ string copy_prepare(string appfolder, string operation, string foldername, strin
 {
 	DIR *dp;
 	struct dirent *dirp;
-	int findex=0, mountblind=0, numfiles_total=0, numfiles_current=1, j=0, i=0;
+	int findex=0, mountblind=0, numfiles_total=0, numfiles_current=1, j=0, i=0, showprogress=0;
 	double copy_totalsize=0, copy_currentsize=0, source_size=0, dest_size=0, freespace_size=0;
 	string source_paths[100], dest_paths[100], check_paths[100];
 	string check_path, sourcefile, destfile, filename, dest, source, title;
@@ -478,9 +473,12 @@ string copy_prepare(string appfolder, string operation, string foldername, strin
 		}
 	}
 
+	//only show progress bar if total size bigger than 512KB
+	if (copy_totalsize < 1048576/2) showprogress=-1;
+
 	//copy files
 	i=0;
-	Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
+	if (showprogress==0) Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
 	while (strcmp(final_list_source[i].c_str(),"") != 0)
 	{
 		sourcefile=final_list_source[i];
@@ -493,20 +491,20 @@ string copy_prepare(string appfolder, string operation, string foldername, strin
 		freespace_size=get_free_space(dest.c_str())+dest_size;
 		if (source_size >= freespace_size)
 		{
-			Mess.ProgressBarDialogAbort();
+			if (showprogress==0) Mess.ProgressBarDialogAbort();
 			return "Not enough space to copy the file ("+filename+") to destination path ("+dest+").";
 		}
 		else
 		{
 			if (mkdir_full(dest)!=0)
 			{
-				Mess.ProgressBarDialogAbort();
+				if (showprogress==0) Mess.ProgressBarDialogAbort();
 				return "Could not create directory ("+dest+").";
 			}
-			ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(),source_size, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,0);
+			ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(),source_size, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,0,showprogress);
 			if (ret != "")
 			{
-				Mess.ProgressBarDialogAbort();
+				if (showprogress==0) Mess.ProgressBarDialogAbort();
 				return ret;
 			}
 		}
@@ -514,14 +512,14 @@ string copy_prepare(string appfolder, string operation, string foldername, strin
 		numfiles_current++;
 		i++;
 	}
-	Mess.ProgressBarDialogAbort();
+	if (showprogress==0) Mess.ProgressBarDialogAbort();
 
 	//check files
 	i=0;
 	copy_currentsize=0;
 	numfiles_current=1;
 	title="Checking files ...";
-	Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
+	if (showprogress==0) Mess.SingleProgressBarDialog(title.c_str(), "Processing files...");
 	while (strcmp(final_list_source[i].c_str(),"") != 0)
 	{
 		sourcefile=final_list_source[i];
@@ -530,17 +528,17 @@ string copy_prepare(string appfolder, string operation, string foldername, strin
 		filename=final_list_source[i].substr(final_list_source[i].find_last_of("/")+1);
 		source=final_list_source[i].substr(0,final_list_source[i].find_last_of("/")+1);
 		dest=final_list_dest[i].substr(0,final_list_dest[i].find_last_of("/")+1);
-		ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(),source_size, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,1);
+		ret=copy_file(title, source.c_str(), dest.c_str(), filename.c_str(),source_size, copy_currentsize, copy_totalsize, numfiles_current, numfiles_total,1,showprogress);
 		if (ret != "")
 		{
-			Mess.ProgressBarDialogAbort();
+			if (showprogress==0) Mess.ProgressBarDialogAbort();
 			return ret;
 		}
 		copy_currentsize=copy_currentsize+source_size;
 		numfiles_current++;
 		i++;
 	}
-	Mess.ProgressBarDialogAbort();
+	if (showprogress==0) Mess.ProgressBarDialogAbort();
 
 	return "";
 }

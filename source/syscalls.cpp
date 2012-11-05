@@ -1,4 +1,4 @@
-#include "xmbmp-syscalls.h"
+#include "syscalls.h"
 
 struct platform_info
 {
